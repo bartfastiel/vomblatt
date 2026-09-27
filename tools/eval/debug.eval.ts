@@ -10,7 +10,9 @@ import { decodePgm, readScore, readSheet } from '../../src/scan/__fixtures__/fix
 import { describeNotes, scoreAccuracy } from '../../src/scan/__fixtures__/metrics';
 import { ALL_VARIANTS } from '../../src/scan/__fixtures__/variants';
 import type { BinaryImage } from '../../src/scan/binarize';
-import { accidentalKind, boxOf, strokesOf } from '../../src/scan/glyphs';
+import { accidentalKind, boxOf, keySymbolKind, strokesOf } from '../../src/scan/glyphs';
+import { componentsNearStart } from '../../src/scan/header';
+import { stepAt } from '../../src/scan/staves';
 import { type Recognition, recognizeGray } from '../../src/scan/pipeline';
 import { restOf } from '../../src/scan/rests';
 import { looseComponents } from '../../src/scan/staff-reader';
@@ -61,6 +63,33 @@ const logLoose = (result: Recognition): void => {
   });
 };
 
+const logHeader = (result: Recognition, index: number): void => {
+  const reading = result.readings[index];
+  if (reading === undefined) return;
+  const sp = reading.staff.spacing;
+  for (const c of componentsNearStart(result.labeled, reading.staff, 12)) {
+    const { w, h, fill } = boxOf(c, sp);
+    const kind = keySymbolKind(c, result.labeled, result.clean.width, sp);
+    const step = stepAt(reading.staff, (c.x0 + c.x1) / 2, (c.y0 + c.y1) / 2).toFixed(1);
+    log('  header comp', c.x0, c.x1, c.y0, `w${w.toFixed(2)} h${h.toFixed(2)} f${fill.toFixed(2)}`, kind, 'step', step);
+  }
+};
+
+const logEvents = (result: Recognition, index: number): void => {
+  for (const head of result.heads.filter((h) => h.staff === index)) {
+    log('  head', Math.round(head.x), Math.round(head.y), 'step', head.step, head.filled ? 'filled' : 'hollow');
+  }
+  for (const event of result.readings[index]?.events ?? []) {
+    if (event.kind === 'rest') {
+      log('  rest', Math.round(event.x), event.duration);
+      continue;
+    }
+    let stem = 'none';
+    if (event.stem !== null) stem = event.stem.up ? 'up' : 'down';
+    log('  note', Math.round(event.x), event.heads.map((h) => h.step).join('+'), event.duration, 'stem', stem);
+  }
+};
+
 const logCrop = (image: BinaryImage, crop: string): void => {
   const [x0 = 0, y0 = 0, x1 = 0, y1 = 0] = crop.split(',').map(Number);
   for (let y = y0; y < y1; y++) {
@@ -88,11 +117,23 @@ it('logs what the pipeline reads', () => {
   const photo = input();
   writePgm('input.pgm', photo);
   const t0 = performance.now();
-  const result = recognizeGray(photo);
+  const rejected: string[] = [];
+  const result = recognizeGray(photo, (x, y, reason) =>
+    rejected.push(`${String(Math.round(x))},${String(Math.round(y))} ${reason}`),
+  );
+  if (process.env.EVAL_REJECTED !== undefined) {
+    const [x0 = 0, y0 = 0, x1 = 1e9, y1 = 1e9] = process.env.EVAL_REJECTED.split(',').map(Number);
+    for (const r of rejected) {
+      const [x = 0, y = 0] = (r.split(' ')[0] ?? '').split(',').map(Number);
+      if (x >= x0 && x <= x1 && y >= y0 && y <= y1) log('  rejected', r);
+    }
+  }
   log('ms', (performance.now() - t0).toFixed(0), 'scale', result.scale.toFixed(3), 'angle', result.angle);
   writePgm('clean.pgm', { ...result.clean, data: result.clean.data.map((v) => (v === 1 ? 0 : 255)) });
   logStaves(result);
   if (process.env.EVAL_LOOSE !== undefined) logLoose(result);
+  if (process.env.EVAL_EVENTS !== undefined) logEvents(result, Number(process.env.EVAL_EVENTS));
+  if (process.env.EVAL_HEADER !== undefined) logHeader(result, Number(process.env.EVAL_HEADER));
   if (process.env.EVAL_CROP !== undefined) logCrop(result.clean, process.env.EVAL_CROP);
   logScore(result);
   expect(lines.length).toBeGreaterThan(0);

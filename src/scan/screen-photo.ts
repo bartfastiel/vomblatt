@@ -125,7 +125,7 @@ export const screenQuad = (
   aspect: number, // screen height / width
   { tilt = 0, keystone = 0, cover = 0.8 }: { tilt?: number; keystone?: number; cover?: number } = {},
 ): Quad => {
-  const w = cover * width;
+  const w = Math.min(cover * width, (cover * height) / aspect); // the whole screen in the frame
   const h = w * aspect;
   const cx = width / 2;
   const cy = height / 2;

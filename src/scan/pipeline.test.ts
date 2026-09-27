@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { type Score, VOICES } from '../score/score';
 import { readScore, readSheet } from './__fixtures__/fixtures';
 import { scoreAccuracy } from './__fixtures__/metrics';
-import { PAPER_VARIANTS, SCREEN_VARIANTS } from './__fixtures__/variants';
+import { PAPER_VARIANTS, PHONE_SCREEN_VARIANTS, SCREEN_VARIANTS } from './__fixtures__/variants';
 import { NoStaffError, recognizeGray } from './pipeline';
 
 // Simulated photos take a second or more under coverage on a slow runner
@@ -61,6 +62,37 @@ describe.each(HYMNS)('recognizeGray on $id', SLOW, ({ id, clean, screen }) => {
       const accuracy = scoreAccuracy(expected, recognizeGray(variant.render(sheet)).score).S;
       expect(accuracy?.pitch).toBeGreaterThanOrEqual(screen);
       expect(accuracy?.rhythm).toBeGreaterThanOrEqual(screen);
+    }
+  });
+});
+
+// Four-part settings: minimum accuracy per voice, clean and as simulated photos of paper and of a phone screen
+const CHORALES = [
+  { id: 'chorale-satb2', clean: 0.8, photo: 0.6 },
+  { id: 'chorale-satb4', clean: 0.9, photo: 0.8 },
+];
+
+describe.each(CHORALES)('recognizeGray on $id', SLOW, ({ id, clean, photo }) => {
+  const sheet = readSheet(id);
+  const expected = readScore(id);
+
+  const expectVoices = (score: Score, minimum: number): void => {
+    const accuracy = scoreAccuracy(expected, score);
+    for (const voice of VOICES) {
+      expect(accuracy[voice]?.pitch, voice).toBeGreaterThanOrEqual(minimum);
+      expect(accuracy[voice]?.rhythm, voice).toBeGreaterThanOrEqual(minimum);
+    }
+  };
+
+  it('reads all four voices of the clean engraving', () => {
+    const { score } = recognizeGray(sheet);
+    expect(Object.keys(score.voices)).toEqual(['S', 'A', 'T', 'B']);
+    expectVoices(score, clean);
+  });
+
+  it('reads a photo of the printed page and a photo of a phone screen', () => {
+    for (const variant of [PAPER_VARIANTS[1], PHONE_SCREEN_VARIANTS[2]]) {
+      if (variant !== undefined) expectVoices(recognizeGray(variant.render(sheet)).score, photo);
     }
   });
 });

@@ -19,11 +19,14 @@ const screen = (
 ): Variant => ({
   name: `screen ${String(tilt)}° k${String(keystone)} g${String(glare)} s${String(seed)} px${String(screenPixels)}`,
   render: (sheet) => {
-    const height = Math.round(0.75 * width);
+    // A tall sheet is photographed in portrait
+    const portrait = sheet.height > 0.8 * sheet.width;
+    const frameWidth = portrait ? Math.round(0.75 * width) : width;
+    const height = portrait ? width : Math.round(0.75 * width);
     return simulateScreenPhoto(sheet, {
-      width,
+      width: frameWidth,
       height,
-      screen: screenQuad(width, height, sheet.height / sheet.width, { tilt, keystone, cover: 0.85 }),
+      screen: screenQuad(frameWidth, height, sheet.height / sheet.width, { tilt, keystone, cover: 0.85 }),
       screenPixels,
       glare,
       seed,
@@ -55,4 +58,9 @@ export const PHONE_SCREEN_VARIANTS: readonly Variant[] = [
 
 export const PAPER_VARIANTS: readonly Variant[] = [paper(1.5, 1), paper(-3, 2), paper(4.5, 3)];
 
-export const ALL_VARIANTS: readonly Variant[] = [CLEAN, ...SCREEN_VARIANTS, ...PAPER_VARIANTS];
+export const ALL_VARIANTS: readonly Variant[] = [
+  CLEAN,
+  ...SCREEN_VARIANTS,
+  ...PHONE_SCREEN_VARIANTS,
+  ...PAPER_VARIANTS,
+];

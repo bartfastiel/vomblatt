@@ -27,9 +27,12 @@ interface Placed {
   readonly clef: Clef;
 }
 
-const selects = (event: StaffEvent, select: Selection, middle: number): boolean => {
+// A rest shifted up belongs to the upper voice, shifted down to the lower one; a centred rest to both
+const selects = (event: StaffEvent, select: Selection, middle: number, spacing: number): boolean => {
   if (select === 'all') return true;
-  if (event.kind === 'rest') return select === 'up' ? event.y <= middle + 1 : event.y >= middle - 1;
+  if (event.kind === 'rest') {
+    return select === 'up' ? event.y <= middle + 0.5 * spacing : event.y >= middle - 0.5 * spacing;
+  }
   if (event.stem === null) return true;
   return event.stem.up === (select === 'up');
 };
@@ -38,6 +41,20 @@ const selects = (event: StaffEvent, select: Selection, middle: number): boolean 
 const headFor = (event: NoteEvent, select: Selection) =>
   select === 'down' ? event.heads[event.heads.length - 1] : event.heads[0];
 
+// The events of a staff that belong to the part, left to right
+const partEvents = (reading: StaffReading, part: VoicePart): StaffEvent[] => {
+  const seen = new Set<unknown>();
+  return reading.events.filter((event) => {
+    const middle = lineY(reading.staff, 2, event.x);
+    if (!selects(event, part.select, middle, reading.staff.spacing)) return false;
+    // One voice on the staff: a head read with a stem either way is one note, not two
+    const heads = event.kind === 'note' ? event.heads : [event];
+    if (part.select === 'all' && heads.every((h) => seen.has(h))) return false;
+    for (const h of heads) seen.add(h);
+    return true;
+  });
+};
+
 // Each system's events of one part with the running bar index; a system that does not end on a bar line continues
 // its last bar on the next system
 const placeEvents = (readings: readonly StaffReading[], systems: readonly System[], voice: Voice): Placed[] => {
@@ -45,14 +62,13 @@ const placeEvents = (readings: readonly StaffReading[], systems: readonly System
   let bar = 0;
   for (const system of systems) {
     const part = system.parts.find((p) => p.voice === voice);
+    const reading = part === undefined ? undefined : readings[part.staff];
     const barlines = systemBarlines(readings, system);
-    if (part !== undefined) {
-      const reading = readings[part.staff];
-      const middle = reading === undefined ? 0 : lineY(reading.staff, 2, reading.staff.x0);
-      for (const event of reading?.events ?? []) {
-        if (!selects(event, part.select, middle)) continue;
+    if (part !== undefined && reading !== undefined) {
+      const clef = reading.header.clef ?? part.clef;
+      for (const event of partEvents(reading, part)) {
         const crossed = barlines.filter((x) => x < event.x).length;
-        placed.push({ event, bar: bar + crossed, staff: part.staff, clef: reading?.header.clef ?? part.clef });
+        placed.push({ event, bar: bar + crossed, staff: part.staff, clef });
       }
     }
     bar += barlines.length;

@@ -1,15 +1,16 @@
 // Photo → Score, all steps in order. Pure code on pixel arrays: runs in a worker in the browser and in Node in tests.
-import type { Score, Voice } from '../score/score';
+import type { Score } from '../score/score';
 import type { BinaryImage } from './binarize';
 import { connectedComponents, type Labeled } from './components';
-import { findHeads, type Head } from './heads';
+import { findHeads, type Head, type RejectReport } from './heads';
 import { type Header, readHeader } from './header';
 import { distanceToPaper, fillHoles, removeStaffLines } from './morphology';
 import { prepare } from './prepare';
 import type { GrayImage } from './raster';
-import { buildScore, type System } from './score-builder';
+import { buildScore } from './score-builder';
 import { readStaff, type StaffReading } from './staff-reader';
 import { findStaves, type Staff } from './staves';
+import { groupSystems, voicesOf } from './systems';
 import { findVerticals, type Vertical } from './verticals';
 
 export class NoStaffError extends Error {
@@ -46,21 +47,18 @@ const commonKey = (headers: readonly Header[]): number => {
   return best;
 };
 
-// For now every staff is a system of its own and carries the melody
-const melodySystems = (readings: readonly StaffReading[]): System[] =>
-  readings.map((_, i) => ({ staves: [i], parts: [{ voice: 'S', staff: i, select: 'all', clef: 'treble' }] }));
-
 // Hollow heads filled: holes of the image with lines (a head in a space keeps its ring there, lines through a head
 // split its hole in two small ones) and those of the image without lines (a hole no longer split by a line), each
 // smaller than the paper between two lines so that the gap between a bar line and a head stays open
 const solidHeads = (binary: BinaryImage, clean: BinaryImage, staves: readonly Staff[], spacing: number) => {
-  const withLines = removeStaffLines(fillHoles(binary, Math.round(spacing), Math.round(0.72 * spacing)), staves);
+  const withLines = removeStaffLines(fillHoles(binary, Math.round(spacing), Math.round(0.8 * spacing)), staves);
   const withoutLines = fillHoles(clean, Math.round(spacing), Math.round(0.9 * spacing));
   const data = withLines.data.map((value, i) => value | (withoutLines.data[i] ?? 0));
   return { ...clean, data };
 };
 
-export const recognizeGray = (input: GrayImage): Recognition => {
+// `rejected` hears about every head candidate that failed a test – for tuning, not needed to recognise
+export const recognizeGray = (input: GrayImage, rejected?: RejectReport): Recognition => {
   const prepared = prepare(input);
   if (prepared === null) throw new NoStaffError();
   const { binary } = prepared;
@@ -69,7 +67,7 @@ export const recognizeGray = (input: GrayImage): Recognition => {
   const spacing = staves.map((s) => s.spacing).sort((a, b) => a - b)[Math.floor(staves.length / 2)] ?? 1;
   const clean = removeStaffLines(binary, staves);
   const solid = solidHeads(binary, clean, staves, spacing);
-  const heads = findHeads({ original: binary, clean, solid, distance: distanceToPaper(solid) }, staves);
+  const heads = findHeads({ original: binary, clean, solid, distance: distanceToPaper(solid) }, staves, rejected);
   const verticals = findVerticals(clean, Math.max(3, Math.round(0.42 * spacing)), Math.round(spacing));
   const labeled = connectedComponents(clean);
   const headers = staves.map((staff) => readHeader({ clean, labeled, verticals }, staff));
@@ -81,7 +79,12 @@ export const recognizeGray = (input: GrayImage): Recognition => {
       { clean, labeled, verticals },
     ),
   );
-  const voices: Voice[] = ['S'];
-  const score = buildScore(readings, melodySystems(readings), voices, { keyFifths: commonKey(headers) });
+  const systems = groupSystems(
+    binary,
+    staves,
+    headers,
+    readings.map((reading) => reading.barlines),
+  );
+  const score = buildScore(readings, systems, voicesOf(systems), { keyFifths: commonKey(headers) });
   return { labeled, clean, verticals, score, staves, readings, heads, scale: prepared.scale, angle: prepared.angle };
 };

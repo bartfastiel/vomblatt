@@ -60,9 +60,14 @@ export const thinMask = (image: BinaryImage, maxRun: number): Uint8Array => {
 
 // Bands of rows that together hold line pixels over at least 30 % of the strip width (moiré breaks lines into
 // dashes) and are thin
-export const bandsOf = (profile: Float32Array, stripWidth: number, maxThickness: number): number[] => {
+export interface Band {
+  readonly y: number; // centre, weighted by the profile
+  readonly mass: number; // line pixels in it
+}
+
+export const bandsOf = (profile: Float32Array, stripWidth: number, maxThickness: number): Band[] => {
   const low = 0.12 * stripWidth;
-  const ys: number[] = [];
+  const bands: Band[] = [];
   let y = 0;
   while (y < profile.length) {
     if (floatAt(profile, y) <= low) {
@@ -77,29 +82,33 @@ export const bandsOf = (profile: Float32Array, stripWidth: number, maxThickness:
       weighted += floatAt(profile, end) * end;
       end++;
     }
-    if (end - y <= maxThickness && mass >= 0.3 * stripWidth) ys.push(weighted / mass);
+    if (end - y <= maxThickness && mass >= 0.3 * stripWidth) bands.push({ y: weighted / mass, mass });
     y = end;
   }
-  return ys;
+  return bands;
 };
 
-// Five consecutive lines with equal gaps (±30 %: a screen's pixel grid rounds them) near the expected spacing
-export const staffGroups = (ys: readonly number[], spacing: number): number[][] => {
-  const groups: number[][] = [];
-  let i = 0;
-  while (i + 4 < ys.length) {
-    const five = ys.slice(i, i + 5);
+// Five consecutive lines with equal gaps (±30 %: a screen's pixel grid rounds them) near the expected spacing. Where
+// candidates overlap (a ledger line continues the staff at the same distance) the one with the stronger lines wins.
+export const staffGroups = (bands: readonly Band[], spacing: number): number[][] => {
+  const candidates: { first: number; mass: number }[] = [];
+  for (let i = 0; i + 4 < bands.length; i++) {
+    const five = bands.slice(i, i + 5).map((b) => b.y);
     const gaps = five.slice(1).map((y, k) => y - numberAt(five, k));
     const mean = (numberAt(five, 4) - numberAt(five, 0)) / 4;
     const regular =
       mean >= 0.7 * spacing && mean <= 1.4 * spacing && gaps.every((gap) => Math.abs(gap - mean) <= 0.3 * mean);
-    if (regular) {
-      groups.push(five);
-      i += 5;
-    } else {
-      i++;
-    }
+    if (regular) candidates.push({ first: i, mass: bands.slice(i, i + 5).reduce((sum, b) => sum + b.mass, 0) });
   }
+  const taken = new Set<number>();
+  const groups: number[][] = [];
+  candidates.sort((a, b) => b.mass - a.mass);
+  for (const { first } of candidates) {
+    if ([0, 1, 2, 3, 4].some((k) => taken.has(first + k))) continue;
+    for (let k = 0; k < 5; k++) taken.add(first + k);
+    groups.push(bands.slice(first, first + 5).map((b) => b.y));
+  }
+  groups.sort((a, b) => numberAt(a, 0) - numberAt(b, 0));
   return groups;
 };
 

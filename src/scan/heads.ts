@@ -2,7 +2,7 @@
 // distance thick in every direction (beams, stems, lines, rests, dots and accidentals are thinner). Each candidate
 // must look like a head (an ellipse full of ink), must stand on a staff, and beyond the staff on its ledger lines.
 import type { BinaryImage } from './binarize';
-import { numberAt, shortAt } from './raster';
+import { numberAt } from './raster';
 import { type Staff, stepAt, stepY } from './staves';
 
 export interface Head {
@@ -160,7 +160,7 @@ export const ledgersPresent = (image: BinaryImage, staff: Staff, x: number, step
 const centreOf = (images: HeadImages, c: Candidate, spacing: number): { x: number; y: number } => {
   const { width } = images.solid;
   const threshold = 0.8 * 3 * c.d;
-  const reach = Math.round(0.6 * spacing);
+  const reach = Math.round(0.45 * spacing);
   let sx = 0;
   let sy = 0;
   let n = 0;
@@ -221,40 +221,52 @@ const squareCorners = (image: BinaryImage, x: number, y: number, spacing: number
     ),
   );
 
-// Width over height of the core (at least half as far from the paper as the centre): a head is an ellipse lying on
-// its side, the filled bowl of a letter or the middle of a natural sign is round
-const coreAspect = (distance: Uint16Array, width: number, x: number, y: number, d: number): number => {
-  const threshold = 1.5 * d; // half of the centre's distance, in thirds of a pixel
-  const cx = Math.round(x);
-  const cy = Math.round(y);
-  const reach = (dx: number, dy: number): number => {
-    let n = 0;
-    while (shortAt(distance, (cy + (n + 1) * dy) * width + cx + (n + 1) * dx) >= threshold) n++;
-    return n;
-  };
-  return (reach(1, 0) + reach(-1, 0) + 1) / (reach(0, 1) + reach(0, -1) + 1);
-};
+interface Probe {
+  readonly images: HeadImages;
+  readonly staff: Staff;
+  readonly spacing: number;
+  readonly x: number;
+  readonly y: number;
+  readonly d: number; // distance of the candidate to the paper, pixels
+}
 
-const headOf = (images: HeadImages, staves: readonly Staff[], c: Candidate): Head | null => {
+// What a head must look like, each test with the name it is reported under
+const CHECKS: readonly (readonly [string, (p: Probe) => boolean])[] = [
+  ['ellipse', (p) => inkInEllipse(p.images.solid, p.x, p.y, 0.5 * p.spacing, 0.36 * p.spacing, HEAD_TILT) >= 0.9],
+  [
+    'height',
+    (p) => {
+      const extent = verticalExtent(p.images.solid, p.x, p.y);
+      return extent <= 3.2 * p.spacing && extent >= 0.72 * p.spacing;
+    },
+  ],
+  ['width', (p) => horizontalExtent(p.images.solid, p.x, p.y) >= 1.05 * p.spacing],
+  ['isolated', (p) => isolated(p.images.solid, p.x, p.y, p.spacing)],
+  ['ledgers', (p) => ledgersPresent(p.images.original, p.staff, p.x, Math.round(stepAt(p.staff, p.x, p.y)))],
+];
+
+export type RejectReport = (x: number, y: number, reason: string) => void;
+
+const headOf = (images: HeadImages, staves: readonly Staff[], c: Candidate, report?: RejectReport): Head | null => {
   const staffIndex = staffOfPoint(staves, c.x, c.y);
   const staff = staves[staffIndex];
-  if (staff === undefined) return null;
+  if (staff === undefined || c.d > 0.7 * staff.spacing) return null;
   const { spacing } = staff;
-  if (c.d > 0.7 * spacing) return null;
   const { x, y } = centreOf(images, c, spacing);
-  if (inkInEllipse(images.solid, x, y, 0.5 * spacing, 0.36 * spacing, HEAD_TILT) < 0.9) return null;
-  const extent = verticalExtent(images.solid, x, y);
-  if (extent > 3.2 * spacing || extent < 0.72 * spacing) return null;
-  if (coreAspect(images.distance, images.solid.width, x, y, c.d) < 0.9) return null;
-  if (horizontalExtent(images.solid, x, y) < 1.05 * spacing) return null;
-  if (!isolated(images.solid, x, y, spacing)) return null;
+  const probe: Probe = { images, staff, spacing, x, y, d: c.d };
+  const failed = CHECKS.find(([, check]) => !check(probe));
+  if (failed !== undefined) {
+    report?.(x, y, failed[0]);
+    return null;
+  }
   const rawStep = stepAt(staff, x, y);
   const step = Math.round(rawStep);
-  if (!ledgersPresent(images.original, staff, x, step)) return null;
   // Hollow: part of the head is a filled hole – paper in the image as it was, ink in the solid one
-  const ink = inkInEllipse(images.clean, x, y, 0.45 * spacing, 0.32 * spacing, HEAD_TILT);
-  const hole = 1 - ink;
-  if (hole < 0.1 && squareCorners(images.solid, x, y, spacing)) return null;
+  const hole = 1 - inkInEllipse(images.clean, x, y, 0.45 * spacing, 0.32 * spacing, HEAD_TILT);
+  if (hole < 0.1 && squareCorners(images.solid, x, y, spacing)) {
+    report?.(x, y, 'block');
+    return null;
+  }
   return {
     x,
     y,
@@ -266,7 +278,7 @@ const headOf = (images: HeadImages, staves: readonly Staff[], c: Candidate): Hea
   };
 };
 
-export const findHeads = (images: HeadImages, staves: readonly Staff[]): Head[] => {
+export const findHeads = (images: HeadImages, staves: readonly Staff[], report?: RejectReport): Head[] => {
   const spacing = numberAt(
     staves.map((s) => s.spacing).sort((a, b) => a - b),
     Math.floor(staves.length / 2),
@@ -274,7 +286,7 @@ export const findHeads = (images: HeadImages, staves: readonly Staff[]): Head[] 
   const { width, height } = images.solid;
   const candidates = suppress(ridgeMaxima(images.distance, width, height, 0.3 * spacing), 0.35 * spacing);
   const heads = candidates.flatMap((c) => {
-    const head = headOf(images, staves, c);
+    const head = headOf(images, staves, c, report);
     return head === null ? [] : [{ ...head, d: c.d }];
   });
   const kept = suppress(heads, 0.9 * spacing);

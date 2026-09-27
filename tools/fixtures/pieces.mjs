@@ -39,6 +39,15 @@ const HYMN_LYRICS = (
   .split(' ')
   .map((syllable, i, all) => (all[i - 1]?.endsWith('-') ? `-${syllable}` : syllable));
 
+// A four-part setting in G major written for the tests: eighth passing notes, C sharp, unisons (one head with two
+// stems), whole notes at the end
+const CHORALE = {
+  S: '4g 4g 4a 4b | 4cc 4b 2a | 4b 8aL 8gJ 4a 4b | 4a 4a 2g | 4b 4b 4cc# 4dd | 4ee 4dd 2cc# | 4dd 4b 4a 4g | 1g',
+  A: '4d 4e 4f# 4g | 4g 4g 2f# | 4g 4f# 4f# 4g | 4e 4f# 2d | 4g 4g 4g 4f# | 4g 4f# 2e | 4f# 4g 4f# 4g | 1d',
+  T: '4B 4c 4d 4d | 4e 4d 2d | 4d 8cL 8BJ 4A 4d | 4c 4c 2B | 4d 4e 4e 4d | 4c 4d 2A | 4A 4d 4d 4B | 1B',
+  B: '4G 4C 4D 4GG | 4C 4GG 2D | 4G 4D 4D 4G | 4C 4D 2GG | 4G 4E 4A 4D | 4C 4D 2A | 4D 4GG 4D 4E | 1GG',
+};
+
 export const PIECES = [
   {
     // "Alle meine Entchen", traditional German children's song, as printed on countless song sheets
@@ -90,5 +99,31 @@ export const PIECES = [
         '2f 4g 4a | 4b- 4a 2g | 4a 8gL 8fJ 4e 4r | 2f 2r | 4cc 4bn 4a 4g | 4a 4b- 2cc | ' +
         '4dd 16ccL 16b- 8aJ 4g 4f | 1f | 8r 8f 4f 4a 4cc | 4.dd 8cc 4b- 4a | 2g 2r | 4e- 4f 4g 4en | 1f',
     },
+  },
+  {
+    // Chorale on two staves: soprano and alto on the treble staff (stems up / down), tenor and bass on the bass staff
+    id: 'chorale-satb2',
+    layout: 'satb2',
+    key: 'f#',
+    keyFifths: 1,
+    meter: [4, 4],
+    font: 'Leipzig',
+    pageWidth: 1300,
+    scale: 85,
+    lyrics: HYMN_LYRICS,
+    voices: CHORALE,
+  },
+  {
+    // The same chorale in open score: four staves, the tenor in the octave treble clef
+    id: 'chorale-satb4',
+    layout: 'satb4',
+    key: 'f#',
+    keyFifths: 1,
+    meter: [4, 4],
+    font: 'Bravura',
+    pageWidth: 1500,
+    scale: 75,
+    lyrics: HYMN_LYRICS,
+    voices: CHORALE,
   },
 ];

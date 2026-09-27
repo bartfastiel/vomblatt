@@ -50,17 +50,23 @@ const hasEightBelow = (others: readonly Component[], clef: Component, spacing: n
     return h >= 0.4 && h <= 1.3 && Math.abs(x - centre) <= 0.5 * spacing && below;
   });
 
+// The 8 drawn onto the clef's foot: the clef reaches much further below the staff than a plain treble clef does
+const eightAttached = (clef: Component, staff: Staff): boolean =>
+  clef.y1 > lineY(staff, 4, (clef.x0 + clef.x1) / 2) + 2.2 * staff.spacing;
+
 interface Cursor {
   end: number;
   index: number;
 }
 
-// Skips specks (the bass clef's dots, noise) and returns the next component that starts close enough
+// Skips specks and pieces already read and returns the next component that starts close enough
 const nextNear = (components: readonly Component[], cursor: Cursor, spacing: number): Component | null => {
   while (cursor.index < components.length) {
     const c = components[cursor.index];
     if (c === undefined || c.x0 > cursor.end + MAX_GAP * spacing) return null;
-    if (c.x1 <= cursor.end || !isSpeck(c, spacing)) return c;
+    // Pieces within what was read already are part of it; specks (the bass clef's dots) extend it
+    if (c.x1 > cursor.end && !isSpeck(c, spacing)) return c;
+    if (c.x1 > cursor.end) cursor.end = c.x1;
     cursor.index++;
   }
   return null;
@@ -84,17 +90,30 @@ const unionOf = (parts: readonly Component[]): Component => {
 };
 
 const readClef = (components: readonly Component[], staff: Staff, cursor: Cursor): Clef | null => {
-  // The first tall piece: a bar number above the staff may start further left
-  const first = components.find((c) => boxOf(c, staff.spacing).h >= 2);
+  // The first tall piece: a bar number above the staff may start further left, a brace is taller than any clef
+  const first = components.find((c) => boxOf(c, staff.spacing).h >= 2 && boxOf(c, staff.spacing).h <= 9);
   if (first === undefined || first.x0 > staff.x0 + 3 * staff.spacing) return null;
-  const parts = components.filter((c) => c.x0 <= first.x1 && c.x1 >= first.x0);
+  // Pieces overlapping it or just left of it (the ball of a bass clef) that reach into the staff – not the bar
+  // number above, not the lyrics underneath, not a bracket
+  const top = lineY(staff, 0, (first.x0 + first.x1) / 2);
+  const bottom = lineY(staff, 4, (first.x0 + first.x1) / 2);
+  const parts = components.filter(
+    (c) =>
+      c.x0 <= first.x1 &&
+      c.x1 >= first.x0 - 1.2 * staff.spacing &&
+      c.y0 <= bottom + staff.spacing &&
+      c.y1 >= top &&
+      boxOf(c, staff.spacing).h <= 9 &&
+      (c === first || !isSpeck(c, staff.spacing)),
+  );
   const whole = unionOf(parts);
   const clef = CLEFS[clefKind(whole, staff, staff.spacing)];
   if (clef === undefined) return null;
   cursor.index = Math.max(...parts.map((c) => components.indexOf(c))) + 1;
   cursor.end = whole.x1;
   const others = components.filter((c) => !parts.includes(c));
-  if (clef === 'treble' && hasEightBelow(others, whole, staff.spacing)) return 'treble8';
+  if (clef === 'treble' && (hasEightBelow(others, whole, staff.spacing) || eightAttached(whole, staff)))
+    return 'treble8';
   return clef;
 };
 

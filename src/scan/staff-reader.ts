@@ -54,8 +54,13 @@ export interface Page {
 
 const HEAD_HALF_WIDTH = 0.6; // line distances from the centre to the side where the stem attaches
 
-// The stem at the head's right going up, or at its left going down; heads in the middle of a chord sit along it
-export const stemOf = (head: Head, verticals: readonly Vertical[], spacing: number): Stem | null => {
+// The stems of a head: at its right going up, at its left going down – both where two voices sing it in unison
+export const stemsOf = (head: Head, verticals: readonly Vertical[], spacing: number): Stem[] =>
+  [stemOf(head, verticals, spacing, true), stemOf(head, verticals, spacing, false)].flatMap((s) =>
+    s === null ? [] : [s],
+  );
+
+export const stemOf = (head: Head, verticals: readonly Vertical[], spacing: number, wantUp: boolean): Stem | null => {
   let best: Stem | null = null;
   let bestScore = Infinity;
   for (const vertical of verticals) {
@@ -67,7 +72,7 @@ export const stemOf = (head: Head, verticals: readonly Vertical[], spacing: numb
       vertical.y1 > head.y + spacing && Math.abs(vertical.y0 - head.y - 0.2 * spacing) <= 0.7 * spacing;
     const up = reachesUp && Math.abs(dx - HEAD_HALF_WIDTH) <= 0.4;
     const down = reachesDown && Math.abs(dx + HEAD_HALF_WIDTH) <= 0.4;
-    if (!up && !down) continue;
+    if (wantUp ? !up : !down) continue;
     const score = Math.abs(Math.abs(dx) - HEAD_HALF_WIDTH);
     if (score < bestScore) {
       bestScore = score;
@@ -77,12 +82,16 @@ export const stemOf = (head: Head, verticals: readonly Vertical[], spacing: numb
   return best;
 };
 
-// A bar line: a stroke from the top line to the bottom line that carries no head
+// A bar line: a stroke over the whole staff that carries no head – ending at its outer lines, or running on to the
+// next staff of the system
 export const isBarline = (vertical: Vertical, staff: Staff): boolean => {
   const { spacing } = staff;
   const top = lineY(staff, 0, vertical.x);
   const bottom = lineY(staff, 4, vertical.x);
-  return Math.abs(vertical.y0 - top) <= 0.5 * spacing && Math.abs(vertical.y1 - bottom) <= 0.8 * spacing;
+  if (vertical.y0 > top + 0.5 * spacing || vertical.y1 < bottom - 0.8 * spacing) return false;
+  const ownTop = Math.abs(vertical.y0 - top) <= 0.5 * spacing;
+  const ownBottom = Math.abs(vertical.y1 - bottom) <= 0.8 * spacing;
+  return (ownTop && ownBottom) || vertical.y1 - vertical.y0 > 6 * spacing;
 };
 
 interface Group {
@@ -96,14 +105,13 @@ const groupByStem = (heads: readonly Head[], verticals: readonly Vertical[], spa
   const byStem = new Map<Vertical | Head, Group>();
   const loose: Head[] = [];
   for (const head of heads) {
-    const stem = stemOf(head, verticals, spacing);
-    if (stem === null) {
-      loose.push(head);
-      continue;
+    const stems = stemsOf(head, verticals, spacing);
+    if (stems.length === 0) loose.push(head);
+    for (const stem of stems) {
+      const group = byStem.get(stem.vertical) ?? { heads: [], stem };
+      group.heads.push(head);
+      byStem.set(stem.vertical, group);
     }
-    const group = byStem.get(stem.vertical) ?? { heads: [], stem };
-    group.heads.push(head);
-    byStem.set(stem.vertical, group);
   }
   let pending = loose;
   for (let changed = true; changed;) {
@@ -120,8 +128,20 @@ const groupByStem = (heads: readonly Head[], verticals: readonly Vertical[], spa
     }
     pending = rest;
   }
-  for (const head of pending) byStem.set(head, { heads: [head], stem: null });
-  return [...byStem.values()].flatMap((group) => oneEnd(group, spacing));
+  const stemmed = [...byStem.values()].flatMap((group) => oneEnd(group, spacing));
+  return [...stemmed, ...stemlessChords(pending, spacing)];
+};
+
+// Heads without stems (whole notes) above each other form one chord: its top head for the upper voice, its bottom
+// head for the lower one
+const stemlessChords = (heads: readonly Head[], spacing: number): Group[] => {
+  const groups: Group[] = [];
+  for (const head of [...heads].sort((a, b) => a.x - b.x)) {
+    const group = groups.find((g) => g.heads.some((h) => Math.abs(h.x - head.x) <= 1.5 * spacing));
+    if (group === undefined) groups.push({ heads: [head], stem: null });
+    else group.heads.push(head);
+  }
+  return groups;
 };
 
 // A stem carries its heads at one end; a "head" at the other end is the thick part of a flag – the thinner one goes
