@@ -6,3 +6,4 @@ playwright-report/
 *.png
 .DS_Store
 Thumbs.db
+.claude/
