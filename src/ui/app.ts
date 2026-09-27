@@ -4,6 +4,7 @@
 import { createAudioEngine } from './audio-engine';
 import { createScoreView } from './score-view';
 import { loadLastVoice, saveLastVoice } from './storage';
+import { createTapTempo } from '../audio/tap-tempo';
 import { formatBuildStamp } from '../format/build-info';
 import { recognize } from '../scan/recognize';
 import { demoScore } from '../score/demo';
@@ -12,9 +13,9 @@ import type { Score, Voice } from '../score/score';
 
 const VOICE_LABEL: Readonly<Record<Voice, string>> = { S: 'Sopran', A: 'Alt', T: 'Tenor', B: 'Bass' };
 const OTHER_VOICES_GAIN = 0.25;
-const MIN_TEMPO_PERCENT = 40;
-const MAX_TEMPO_PERCENT = 120;
-const DEFAULT_TEMPO_PERCENT = 100;
+const MIN_TEMPO = 30; // quarter notes per minute
+const MAX_TEMPO = 200;
+const TEMPO_STEP = 1;
 const DEFAULT_TEMPO = 80; // quarter notes per minute, when the score itself gives none
 
 const SCREEN_HTML = `
@@ -46,10 +47,21 @@ const SCREEN_HTML = `
 
       <button type="button" class="play-button" id="play-button">Abspielen</button>
 
-      <label class="tempo-control">
-        Tempo: <output id="tempo-value">100 %</output>
-        <input type="range" id="tempo-slider" min="${String(MIN_TEMPO_PERCENT)}" max="${String(MAX_TEMPO_PERCENT)}" step="5" value="${String(DEFAULT_TEMPO_PERCENT)}" />
-      </label>
+      <div class="tempo-control" id="tempo-control">
+        <button type="button" class="tempo-step-button" id="tempo-down" aria-label="Langsamer">−</button>
+        <output class="tempo-value" id="tempo-value">♩ = ${String(DEFAULT_TEMPO)}</output>
+        <button type="button" class="tempo-step-button" id="tempo-up" aria-label="Schneller">+</button>
+        <button type="button" class="tap-tempo-button" id="tap-tempo-button">Tippen</button>
+        <input
+          type="range"
+          id="tempo-slider"
+          min="${String(MIN_TEMPO)}"
+          max="${String(MAX_TEMPO)}"
+          step="${String(TEMPO_STEP)}"
+          value="${String(DEFAULT_TEMPO)}"
+          aria-label="Tempo in Vierteln pro Minute"
+        />
+      </div>
 
       <label class="toggle">
         <input type="checkbox" id="loop-toggle" />
@@ -90,11 +102,15 @@ export const startApp = (root: HTMLElement): void => {
   const playButton = mustFind(root.querySelector<HTMLButtonElement>('#play-button'), '#play-button');
   const tempoSlider = mustFind(root.querySelector<HTMLInputElement>('#tempo-slider'), '#tempo-slider');
   const tempoValue = mustFind(root.querySelector<HTMLOutputElement>('#tempo-value'), '#tempo-value');
+  const tempoDownButton = mustFind(root.querySelector<HTMLButtonElement>('#tempo-down'), '#tempo-down');
+  const tempoUpButton = mustFind(root.querySelector<HTMLButtonElement>('#tempo-up'), '#tempo-up');
+  const tapTempoButton = mustFind(root.querySelector<HTMLButtonElement>('#tap-tempo-button'), '#tap-tempo-button');
   const loopToggle = mustFind(root.querySelector<HTMLInputElement>('#loop-toggle'), '#loop-toggle');
   const newPhotoButton = mustFind(root.querySelector<HTMLButtonElement>('#new-photo-button'), '#new-photo-button');
 
   const engine = createAudioEngine();
   const scoreView = createScoreView();
+  const tapTempo = createTapTempo();
   scoreContainer.append(scoreView.svg);
 
   let score: Score | null = null;
@@ -102,13 +118,12 @@ export const startApp = (root: HTMLElement): void => {
   let startQuarter = 0;
   let playing = false;
   let cursorFrame: number | null = null;
+  let tempo = DEFAULT_TEMPO;
 
-  const tempoFactor = (): number => Number(tempoSlider.value) / 100;
-  const baseTempo = (): number => score?.tempo ?? DEFAULT_TEMPO;
   const playbackOptions = () => ({
     voice,
     othersGain: othersToggle.checked ? OTHER_VOICES_GAIN : 0,
-    tempo: baseTempo() * tempoFactor(),
+    tempo,
     start: startQuarter,
     loop: loopToggle.checked,
   });
@@ -136,6 +151,13 @@ export const startApp = (root: HTMLElement): void => {
     if (!playing || score === null) return;
     startQuarter = engine.currentQuarter() ?? startQuarter;
     engine.play(score, playbackOptions());
+  };
+
+  const setTempo = (value: number): void => {
+    tempo = Math.min(MAX_TEMPO, Math.max(MIN_TEMPO, Math.round(value)));
+    tempoSlider.value = String(tempo);
+    tempoValue.textContent = `♩ = ${String(tempo)}`;
+    restartIfPlaying();
   };
 
   const renderVoicePicker = (present: readonly Voice[]): void => {
@@ -170,6 +192,7 @@ export const startApp = (root: HTMLElement): void => {
     playing = false;
     playButton.textContent = 'Abspielen';
     stubHint.hidden = result !== demoScore;
+    setTempo(result.tempo ?? DEFAULT_TEMPO);
 
     scoreView.render(result, voice);
     scoreView.setCursor(0);
@@ -223,8 +246,17 @@ export const startApp = (root: HTMLElement): void => {
   othersToggle.addEventListener('change', restartIfPlaying);
   loopToggle.addEventListener('change', restartIfPlaying);
   tempoSlider.addEventListener('input', () => {
-    tempoValue.textContent = `${tempoSlider.value} %`;
-    restartIfPlaying();
+    setTempo(Number(tempoSlider.value));
+  });
+  tempoDownButton.addEventListener('click', () => {
+    setTempo(tempo - TEMPO_STEP);
+  });
+  tempoUpButton.addEventListener('click', () => {
+    setTempo(tempo + TEMPO_STEP);
+  });
+  tapTempoButton.addEventListener('click', () => {
+    const tapped = tapTempo.tap();
+    if (tapped !== null) setTempo(tapped);
   });
 
   newPhotoButton.addEventListener('click', () => {

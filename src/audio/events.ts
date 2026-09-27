@@ -13,7 +13,7 @@ export interface PlaybackEvent {
 export interface PlaybackOptions {
   readonly voice: Voice; // the emphasised voice, played at full volume
   readonly othersGain: number; // 0 mutes the other voices, e.g. 0.25 plays them quietly
-  readonly tempo: number; // quarter notes per minute, already scaled by the tempo slider
+  readonly tempo: number; // quarter notes per minute, chosen by the user (BPM slider, +/- steps, or tap tempo)
   readonly start: number; // quarter notes from the beginning of the score; playback starts here
   readonly end?: number; // quarter notes; defaults to the end of the score
 }
