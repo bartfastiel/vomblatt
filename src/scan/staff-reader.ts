@@ -128,7 +128,7 @@ const groupByStem = (heads: readonly Head[], verticals: readonly Vertical[], spa
     }
     pending = rest;
   }
-  const stemmed = [...byStem.values()].flatMap((group) => oneEnd(group, spacing));
+  const stemmed = [...byStem.values()].flatMap((group) => oneEnd(sameKind(group), spacing));
   return [...stemmed, ...stemlessChords(pending, spacing)];
 };
 
@@ -143,6 +143,10 @@ const stemlessChords = (heads: readonly Head[], spacing: number): Group[] => {
   }
   return groups;
 };
+
+// The heads on one stem are all filled or all hollow: a hollow "head" among filled ones is the loop of a flag
+const sameKind = (group: Group): Group =>
+  group.heads.some((h) => h.filled) ? { ...group, heads: group.heads.filter((h) => h.filled) } : group;
 
 // A stem carries its heads at one end; a "head" at the other end is the thick end of a beam or flag
 const oneEnd = (group: Group, spacing: number): Group[] => {

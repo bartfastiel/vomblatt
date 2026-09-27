@@ -4,9 +4,10 @@ import type { BinaryImage } from './binarize';
 import { connectedComponents, type Labeled } from './components';
 import { findHeads, type Head, type RejectReport } from './heads';
 import { type Header, readHeader } from './header';
-import { distanceToPaper, fillHoles, removeStaffLines } from './morphology';
+import { dilate, distanceToPaper, fillHoles, removeStaffLines } from './morphology';
 import { type Prepared, prepare } from './prepare';
 import type { GrayImage } from './raster';
+import { findRings } from './rings';
 import { buildScore } from './score-builder';
 import { readStaff, type StaffReading } from './staff-reader';
 import { findStaves, type Staff } from './staves';
@@ -53,7 +54,12 @@ const commonKey = (headers: readonly Header[]): number => {
 const solidHeads = (binary: BinaryImage, clean: BinaryImage, staves: readonly Staff[], spacing: number) => {
   const withLines = removeStaffLines(fillHoles(binary, Math.round(spacing), Math.round(0.8 * spacing)), staves);
   const withoutLines = fillHoles(clean, Math.round(spacing), Math.round(0.9 * spacing));
-  const data = withLines.data.map((value, i) => value | (withoutLines.data[i] ?? 0));
+  // A faintly printed ring with gaps: its hole once the ink is grown by a pixel
+  const grown = dilate(binary);
+  const closed = fillHoles(grown, Math.round(0.9 * spacing), Math.round(0.8 * spacing));
+  const data = withLines.data.map(
+    (value, i) => value | (withoutLines.data[i] ?? 0) | ((closed.data[i] ?? 0) & (1 - (grown.data[i] ?? 0))),
+  );
   return { ...clean, data };
 };
 
@@ -100,14 +106,12 @@ export const recognizeGray = (input: GrayImage, rejected?: RejectReport): Recogn
   const verticals = findVerticals(clean, Math.max(3, Math.round(0.42 * spacing)), Math.round(spacing));
   const labeled = connectedComponents(clean);
   const headers = staves.map((staff) => readHeader({ clean, labeled, verticals, heads }, staff));
-  const all = staves.map((staff, i) =>
-    readStaff(
-      staff,
-      headers[i] ?? { clef: null, keyFifths: null, meter: false, end: staff.x0 },
-      heads.filter((head) => head.staff === i),
-      { clean, labeled, verticals },
-    ),
-  );
+  const all = staves.map((staff, i) => {
+    const header = headers[i] ?? { clef: null, keyFifths: null, meter: false, end: staff.x0 };
+    const own = heads.filter((head) => head.staff === i);
+    const rings = findRings(binary, staff, i, header.end + staff.spacing, own);
+    return readStaff(staff, header, [...own, ...rings], { clean, labeled, verticals });
+  });
   // Five lines without a clef and without a single note on a stem (text, moiré stripes that line up by chance) are
   // no staff
   const real = (reading: StaffReading): boolean =>

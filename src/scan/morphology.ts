@@ -123,6 +123,23 @@ const boxLike = (region: Region, width: number): boolean => {
   return widest >= 4 && top >= 0.8 * widest && bottom >= 0.8 * widest;
 };
 
+// Ink grown by one pixel in every direction (3×3): closes the one-pixel gaps of a faint printed ring
+export const dilate = (image: BinaryImage): BinaryImage => {
+  const { width, height, data } = image;
+  const wide = new Uint8Array(width * height);
+  for (let i = 0; i < data.length; i++) {
+    const x = i % width;
+    const left = x > 0 && data[i - 1] === 1;
+    const right = x < width - 1 && data[i + 1] === 1;
+    if (data[i] === 1 || left || right) wide[i] = 1;
+  }
+  const out = new Uint8Array(width * height);
+  for (let i = 0; i < wide.length; i++) {
+    if (wide[i] === 1 || wide[i - width] === 1 || wide[i + width] === 1) out[i] = 1;
+  }
+  return { width, height, data: out };
+};
+
 // Chamfer distance (3-4) of every ink pixel to the nearest paper pixel, in thirds of a pixel
 export const distanceToPaper = (image: BinaryImage): Uint16Array => {
   const { width, height, data } = image;

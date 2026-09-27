@@ -163,6 +163,36 @@ const inKeyPosition = (kind: GlyphKind, index: number, step: number, clef: Clef 
   return index < steps.length && Math.abs(step - expected) <= 1;
 };
 
+// Small enough to be part of a key signature sign and standing at the next sign's place
+const brokenSign = (c: Component, kind: GlyphKind, index: number, staff: Staff, clef: Clef | null): boolean => {
+  const { w, h } = boxOf(c, staff.spacing);
+  const step = stepAt(staff, (c.x0 + c.x1) / 2, (c.y0 + c.y1) / 2);
+  return h >= 0.7 && h <= 2 && w >= 0.3 && w <= 1.2 && inKeyPosition(kind, index, step, clef);
+};
+
+type KeyStep = { readonly take: 'sign'; readonly sign: GlyphKind } | { readonly take: 'sliver' | 'stop' };
+
+interface KeySoFar {
+  readonly seen: GlyphKind | null;
+  readonly count: number;
+  readonly clef: Clef | null;
+}
+
+// What the next piece is to the key signature read so far: its next sign, a sliver of one, or the end of it
+const keyStepOf = (c: Component, labeled: Labeled, width: number, staff: Staff, key: KeySoFar): KeyStep => {
+  const { seen, count, clef } = key;
+  const kind = keySymbolKind(c, labeled, width, staff.spacing);
+  const known = kind === 'sharp' || kind === 'flat';
+  // A piece of the same kind's next sign that the line removal broke off, right where that sign belongs
+  const piece = !known && seen !== null && brokenSign(c, seen, count, staff, clef);
+  // A thin sliver next to a sign (its stem, cut off by the line removal) is part of it
+  if (!known && !piece) return seen !== null && boxOf(c, staff.spacing).w < 0.4 ? { take: 'sliver' } : { take: 'stop' };
+  const sign: GlyphKind = known ? kind : (seen ?? kind);
+  const step = piece ? stepAt(staff, (c.x0 + c.x1) / 2, (c.y0 + c.y1) / 2) : accidentalStep(c, sign, staff);
+  if ((seen !== null && sign !== seen) || !inKeyPosition(sign, count, step, clef)) return { take: 'stop' };
+  return { take: 'sign', sign };
+};
+
 const readKey = (
   labeled: Labeled,
   width: number,
@@ -171,25 +201,23 @@ const readKey = (
   cursor: Cursor,
   clef: Clef | null,
 ) => {
-  let kindSeen: GlyphKind | null = null;
+  let seen: GlyphKind | null = null;
   let count = 0;
   for (;;) {
     const c = nextNear(components, cursor, staff);
     if (c === null) break;
-    const kind = keySymbolKind(c, labeled, width, staff.spacing);
-    if (kind !== 'sharp' && kind !== 'flat') break;
-    if ((kindSeen !== null && kind !== kindSeen) || !inKeyPosition(kind, count, accidentalStep(c, kind, staff), clef)) {
-      break;
+    const next = keyStepOf(c, labeled, width, staff, { seen, count, clef });
+    if (next.take === 'stop') break;
+    if (next.take === 'sign') {
+      seen = next.sign;
+      count++;
     }
-    kindSeen = kind;
-    count++;
     cursor.end = Math.max(cursor.end, c.x1);
     cursor.index++;
   }
-  if (kindSeen === null) return null;
-  return kindSeen === 'sharp' ? count : -count;
+  if (seen === null) return null;
+  return seen === 'sharp' ? count : -count;
 };
-
 // A time signature as whole pieces: digits, both digits merged, or the C of common time
 const readMeterPieces = (
   labeled: Labeled,
