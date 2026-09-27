@@ -26,3 +26,13 @@ systems; page breaks.
 ## Honest feedback
 
 Re-render what was recognised, cursor follows playback, mark uncertain spots, tap a note to correct pitch/duration.
+
+## Customer answers (2026-09-27)
+
+- Anyone with the link; usable anywhere (offline after first load); first sound in under 10 s; all phones (e.g. Pixel 6 Pro, iPhone).
+- Repertoire: church choir, Evangelisches Gesangbuch (EG), modern choral works (e.g. Pärt) – no pop. Usually printed sheets / hymnal.
+- Usually a photo of an excerpt only, not the whole page.
+- Typically choral score with all voices at once (SATB, usually two staves: S+A treble, T+B bass).
+- The user sings tenor or alto. Choose the voice; optionally hear the others quietly.
+- Piano sound is enough (pure voice/"ooh" sound as an option later). Slower playback is essential.
+- Start position selectable (tap), loop yes, repeats: just play straight through.
