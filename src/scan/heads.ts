@@ -2,7 +2,7 @@
 // distance thick in every direction (beams, stems, lines, rests, dots and accidentals are thinner). Each candidate
 // must look like a head (an ellipse full of ink), must stand on a staff, and beyond the staff on its ledger lines.
 import type { BinaryImage } from './binarize';
-import { numberAt } from './raster';
+import { numberAt, shortAt } from './raster';
 import { type Staff, stepAt, stepY } from './staves';
 
 export interface Head {
@@ -28,24 +28,16 @@ interface Candidate {
   readonly d: number; // distance to paper, pixels
 }
 
-// Pixels whose distance to the paper is a local maximum of at least `min` pixels
-const ridgeMaxima = (distance: Uint16Array, width: number, height: number, min: number): Candidate[] => {
+// Pixels at least `min` pixels from the paper – not only the local maxima: of two heads stacked a third apart the
+// thinner one may have none, its ridge rising into the other head
+const thickPixels = (distance: Uint16Array, width: number, height: number, min: number): Candidate[] => {
   const threshold = Math.ceil(3 * min);
   const found: Candidate[] = [];
-  for (let y = 1; y < height - 1; y++) {
-    for (let x = 1; x < width - 1; x++) {
-      const i = y * width + x;
-      const d = distance[i] ?? 0;
-      if (d < threshold) continue;
-      if (
-        d >= (distance[i - 1] ?? 0) &&
-        d >= (distance[i + 1] ?? 0) &&
-        d >= (distance[i - width] ?? 0) &&
-        d >= (distance[i + width] ?? 0)
-      ) {
-        found.push({ x, y, d: d / 3 });
-      }
-    }
+  for (let i = 0; i < width * height; i++) {
+    const d = shortAt(distance, i);
+    if (d < threshold) continue;
+    const x = i % width;
+    found.push({ x, y: (i - x) / width, d: d / 3 });
   }
   return found;
 };
@@ -213,13 +205,15 @@ const horizontalExtent = (image: BinaryImage, x: number, y: number): number => {
   return right - left + 1;
 };
 
-// Ink in all four corners around the centre: a block (a half or whole rest on its line), not an ellipse
-const squareCorners = (image: BinaryImage, x: number, y: number, spacing: number): boolean =>
-  [-1, 1].every((sx) =>
-    [-1, 1].every(
-      (sy) => image.data[Math.round(y + sy * 0.28 * spacing) * image.width + Math.round(x + sx * 0.5 * spacing)] === 1,
-    ),
-  );
+// A block (a half or whole rest on its line), not an ellipse: ink in all four corners around the centre, and paper
+// just above and below – a head in a chord has its neighbour there
+const squareCorners = (image: BinaryImage, x: number, y: number, spacing: number): boolean => {
+  const inkAt = (dx: number, dy: number): boolean =>
+    image.data[Math.round(y + dy * spacing) * image.width + Math.round(x + dx * spacing)] === 1;
+  const corners = [-1, 1].every((sx) => [-1, 1].every((sy) => inkAt(sx * 0.5, sy * 0.28)));
+  const clear = (dy: number): boolean => [-0.4, -0.2, 0, 0.2, 0.4].filter((dx) => inkAt(dx, dy)).length <= 1;
+  return corners && clear(-0.55) && clear(0.55);
+};
 
 interface Probe {
   readonly images: HeadImages;
@@ -284,12 +278,12 @@ export const findHeads = (images: HeadImages, staves: readonly Staff[], report?:
     Math.floor(staves.length / 2),
   );
   const { width, height } = images.solid;
-  const candidates = suppress(ridgeMaxima(images.distance, width, height, 0.3 * spacing), 0.35 * spacing);
+  const candidates = suppress(thickPixels(images.distance, width, height, 0.3 * spacing), 0.35 * spacing);
   const heads = candidates.flatMap((c) => {
     const head = headOf(images, staves, c, report);
     return head === null ? [] : [{ ...head, d: c.d }];
   });
-  const kept = suppress(heads, 0.9 * spacing);
+  const kept = suppress(heads, 0.75 * spacing);
   return kept.map((h): Head => ({
     x: h.x,
     y: h.y,
