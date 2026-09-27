@@ -144,4 +144,24 @@ export const PIECES = [
       S: '8cL 8d 8e 8fJ 4g 4g | 8aL 8a 8a 8aJ 2g | 8aL 8a 8a 8aJ 2g | 8fL 8f 8f 8fJ 4e 4e | 8dL 8d 8d 8dJ 2c',
     },
   },
+  {
+    // "Alle meine Entchen" as a lead sheet on a web page: a tempo mark, a repeat, quarters and halves, the whole note
+    // C4 on a ledger line at the very end, two bars per system
+    id: 'entchen-leadsheet',
+    title: 'Alle meine Entchen',
+    tempo: 140,
+    layout: 'melody',
+    key: '',
+    keyFifths: 0,
+    meter: [4, 4],
+    font: 'Bravura',
+    pageWidth: 950,
+    scale: 90,
+    lyrics: ENTCHEN_LYRICS,
+    barlines: { 1: '!|:', 3: ':|!' },
+    options: { header: 'auto' },
+    voices: {
+      S: '4c 4d 4e 4f | 2g 2g | 4a 4a 4a 4a | 1g | 4f 4f 4f 4f | 2e 2e | 4g 4g 4g 4g | 1c',
+    },
+  },
 ];

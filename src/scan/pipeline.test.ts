@@ -107,6 +107,25 @@ describe.each(CHORALES)('recognizeGray on $id', SLOW, ({ id, clean, photo }) => 
   });
 });
 
+// A lead sheet as a web page shows it: a tempo mark above the clef, repeat signs at the start and end of a system, the
+// last note a whole C4 on a ledger line
+describe('recognizeGray on the "Alle meine Entchen" lead sheet', SLOW, () => {
+  const sheet = readSheet('entchen-leadsheet');
+  const expected = readScore('entchen-leadsheet');
+
+  it('reads every note with no gaps: no note from the tempo mark, no empty bar from a repeat sign', () => {
+    expect(recognizeGray(sheet).score).toEqual(expected);
+  });
+
+  it('reads a photo of a phone on a desk showing it, the last note included', () => {
+    const variant = DESK_VARIANTS[0];
+    if (variant === undefined) throw new Error('no variant');
+    const notes = recognizeGray(variant.render(sheet)).score.voices.S ?? [];
+    expect(scoreAccuracy(expected, recognizeGray(variant.render(sheet)).score).S?.pitch).toBeGreaterThanOrEqual(0.95);
+    expect(notes[notes.length - 1]?.midi).toBe(60);
+  });
+});
+
 describe('recognizeGray without music', () => {
   it('finds no staff on blank paper', () => {
     const blank = { width: 300, height: 200, data: new Uint8Array(300 * 200).fill(250) };

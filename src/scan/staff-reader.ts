@@ -267,8 +267,15 @@ export const readStaff = (staff: Staff, header: Header, heads: readonly Head[], 
     .filter((v) => !stems.has(v) && v.x > header.end && v.x >= staff.x0 - spacing && v.x <= staff.x1 + spacing)
     .filter((v) => isBarline(v, staff))
     .map((v) => v.x);
-  const events: StaffEvent[] = [...notes, ...rests].sort((a, b) => a.x - b.x);
-  return { staff, header, events, barlines: mergeClose(barlines, spacing) };
+  const merged = mergeClose(barlines, spacing);
+  // Right beside a bar line a stemless hollow "head" is a repeat sign's dots against the thick line
+  const beside = (event: StaffEvent): boolean =>
+    event.kind === 'note' &&
+    event.stem === null &&
+    !event.heads.some((h) => h.filled) &&
+    merged.some((x) => Math.abs(x - event.x) < 0.8 * spacing);
+  const events: StaffEvent[] = [...notes, ...rests].filter((e) => !beside(e)).sort((a, b) => a.x - b.x);
+  return { staff, header, events, barlines: merged };
 };
 
 // A double bar line is one bar line

@@ -21,13 +21,13 @@ export interface Prepared {
 
 const windowRadius = (): number => Math.round(2.5 * SPACING);
 
-// The part of the photo with staves in it, with room for the clef, ledger lines and notes beyond the lines (a photo
-// of a phone on a desk is mostly desk)
+// The part of the photo with staves in it, with room for the clef, ledger lines and notes beyond the lines and for a
+// staff whose lines were too faint to be counted (a photo of a phone on a desk is mostly desk)
 export const cropTo = (image: GrayImage, region: Region, spacing: number): GrayImage => {
-  const x0 = Math.max(0, Math.floor(region.x0 - 6 * spacing));
-  const x1 = Math.min(image.width, Math.ceil(region.x1 + 6 * spacing));
-  const y0 = Math.max(0, Math.floor(region.y0 - 8 * spacing));
-  const y1 = Math.min(image.height, Math.ceil(region.y1 + 8 * spacing));
+  const x0 = Math.max(0, Math.floor(region.x0 - 12 * spacing));
+  const x1 = Math.min(image.width, Math.ceil(region.x1 + 12 * spacing));
+  const y0 = Math.max(0, Math.floor(region.y0 - 20 * spacing));
+  const y1 = Math.min(image.height, Math.ceil(region.y1 + 20 * spacing));
   if (x0 === 0 && y0 === 0 && x1 === image.width && y1 === image.height) return image;
   const width = x1 - x0;
   const data = new Uint8Array(width * (y1 - y0));

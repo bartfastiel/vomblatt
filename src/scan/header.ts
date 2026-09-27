@@ -69,10 +69,17 @@ interface Cursor {
 }
 
 // Skips specks and pieces already read and returns the next component that starts close enough
-const nextNear = (components: readonly Component[], cursor: Cursor, spacing: number): Component | null => {
+const nextNear = (components: readonly Component[], cursor: Cursor, staff: Staff): Component | null => {
+  const { spacing } = staff;
   while (cursor.index < components.length) {
     const c = components[cursor.index];
     if (c === undefined || c.x0 > cursor.end + MAX_GAP * spacing) return null;
+    // Header symbols stand on the staff; a tempo mark or a chord name above it is skipped
+    const x = (c.x0 + c.x1) / 2;
+    if (c.y1 < lineY(staff, 0, x) || c.y0 > lineY(staff, 4, x)) {
+      cursor.index++;
+      continue;
+    }
     // Pieces within what was read already are part of it; specks (the bass clef's dots) extend it
     if (c.x1 > cursor.end && !isSpeck(c, spacing)) return c;
     if (c.x1 > cursor.end) cursor.end = c.x1;
@@ -167,7 +174,7 @@ const readKey = (
   let kindSeen: GlyphKind | null = null;
   let count = 0;
   for (;;) {
-    const c = nextNear(components, cursor, staff.spacing);
+    const c = nextNear(components, cursor, staff);
     if (c === null) break;
     const kind = keySymbolKind(c, labeled, width, staff.spacing);
     if (kind !== 'sharp' && kind !== 'flat') break;
@@ -193,7 +200,7 @@ const readMeterPieces = (
 ) => {
   let found = false;
   for (;;) {
-    const c = nextNear(components, cursor, staff.spacing);
+    const c = nextNear(components, cursor, staff);
     if (c === null || !isMeter(c, labeled, width, staff)) break;
     found = true;
     cursor.end = Math.max(cursor.end, c.x1);

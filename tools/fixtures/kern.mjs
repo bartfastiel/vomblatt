@@ -63,7 +63,8 @@ export const scoreNotes = (bars) => {
 };
 
 // All voices side by side, one kern record per onset; `columns` lists the voice of each kern column (or 'text')
-export const kernBody = (columns, parsed, lyrics) => {
+// `barlines`: kern bar line styles after given bar indexes, e.g. { 1: '!|:', 3: ':|!' } for repeat signs
+export const kernBody = (columns, parsed, lyrics, barlines = {}) => {
   const voices = columns.filter((c) => c !== 'text');
   const barCount = parsed[voices[0]].length;
   const lines = [];
@@ -84,7 +85,8 @@ export const kernBody = (columns, parsed, lyrics) => {
       lines.push(fields.join('\t'));
     }
     const isLast = b === barCount - 1;
-    lines.push(columns.map(() => (isLast ? '==' : `=${String(b + 1)}`)).join('\t'));
+    const style = barlines[b] ?? '';
+    lines.push(columns.map(() => (isLast ? `==${style}` : `=${String(b + 1)}${style}`)).join('\t'));
   }
   return lines;
 };

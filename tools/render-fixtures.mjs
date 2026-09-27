@@ -34,8 +34,10 @@ const kernOf = (piece, parsed) => {
   const header = [spines.join('\t'), layout.clefs.join('\t'), tandem(`*k[${piece.key}]`)];
   if (piece.meter !== null) header.push(tandem(`*M${String(piece.meter[0])}/${String(piece.meter[1])}`));
   if (layout.split) header.push(layout.clefs.map((clef) => (clef === '*' ? '*' : '*^')).join('\t'));
-  const body = kernBody(layout.columns, parsed, piece.lyrics);
+  if (piece.tempo !== undefined) header.push(tandem(`*MM${String(piece.tempo)}`));
+  const body = kernBody(layout.columns, parsed, piece.lyrics, piece.barlines ?? {});
   const title = piece.title === undefined ? [] : [`!!!OTL: ${piece.title}`];
+  if (piece.tempo !== undefined) title.push(`!!!OMD: [quarter] = ${String(piece.tempo)}`);
   return [...title, ...header, ...body, layout.columns.map(() => '*-').join('\t')].join('\n') + '\n';
 };
 
