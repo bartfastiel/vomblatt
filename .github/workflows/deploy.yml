@@ -1,0 +1,164 @@
+# Deployment via SSH to the server. There, Caddy serves /mnt/frag-daniel/vomblatt/app read-only as the site itself
+# (repo frag-daniel, infra/Caddyfile.prod), and the preview directories next to it under their own path.
+#
+#   production  https://<host>/                                    ← dist/ from every push to main
+#   preview     https://<host>/<VOMBLATT_PREVIEW_PATH>/pr-<nr>/    ← dist/ per pull request, removed on close
+#
+# The preview path appears in PR comments and environment URLs and is therefore a repository variable
+# (VOMBLATT_PREVIEW_PATH) – as a secret GitHub would mask it to *** in the environment URL.
+# Secrets: DEPLOY_HOST, DEPLOY_USER (default root), DEPLOY_SSH_KEY.
+# Variables: VOMBLATT_PREVIEW_PATH, VOMBLATT_HOST (optional).
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  workflow_dispatch:
+
+env:
+  SERVER_DIR: /mnt/frag-daniel/vomblatt
+
+permissions:
+  contents: read
+  pull-requests: write
+  deployments: write
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Forks and Dependabot get no secrets – the deployments are then skipped cleanly.
+  prerequisites:
+    name: Prerequisites
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      VOMBLATT_PREVIEW_PATH: ${{ vars.VOMBLATT_PREVIEW_PATH }}
+      VOMBLATT_HOST: ${{ vars.VOMBLATT_HOST || 'vomblatt.wer-ist-daniel-schwarz.de' }}
+    outputs:
+      production: ${{ steps.check.outputs.production }}
+      preview: ${{ steps.check.outputs.preview }}
+      preview_base: ${{ steps.check.outputs.preview_base }}
+    steps:
+      - id: check
+        run: |
+          production=false
+          preview=false
+          if [ -n "$DEPLOY_HOST" ]; then
+            production=true
+          else
+            echo "::notice::DEPLOY_HOST not set – no production deployment."
+          fi
+          if [ -n "$DEPLOY_HOST" ] && [ -n "$VOMBLATT_PREVIEW_PATH" ]; then
+            preview=true
+          else
+            echo "::notice::DEPLOY_HOST/VOMBLATT_PREVIEW_PATH not set – no preview (pr-<nr>)."
+          fi
+          {
+            echo "production=$production"
+            echo "preview=$preview"
+            echo "preview_base=https://$VOMBLATT_HOST/$VOMBLATT_PREVIEW_PATH"
+          } >> "$GITHUB_OUTPUT"
+
+  production:
+    name: Production
+    needs: prerequisites
+    if: needs.prerequisites.outputs.production == 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER || 'root' }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      VOMBLATT_HOST: ${{ vars.VOMBLATT_HOST || 'vomblatt.wer-ist-daniel-schwarz.de' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: SSH key
+        run: .github/scripts/ssh-setup.sh
+      - name: Upload
+        run: |
+          T="$DEPLOY_USER@$DEPLOY_HOST"
+          DEST="$SERVER_DIR/app"
+          ssh "$T" "mkdir -p '$DEST'"
+          .github/scripts/upload-dir.sh dist "$T" "$DEST"
+      - name: Live check (informational)
+        continue-on-error: true
+        run: |
+          curl -fsS --retry 3 --retry-delay 5 "https://$VOMBLATT_HOST/" | grep -q '<title>Vomblatt' \
+            && echo "Live at https://$VOMBLATT_HOST/" \
+            || echo "Not reachable yet – is the server deployment (frag-daniel) still running?"
+
+  preview:
+    name: Preview
+    needs: prerequisites
+    if: needs.prerequisites.outputs.preview == 'true' && github.event_name == 'pull_request' && github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: preview-pr-${{ github.event.pull_request.number }}
+      url: ${{ needs.prerequisites.outputs.preview_base }}/pr-${{ github.event.pull_request.number }}/
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER || 'root' }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      VOMBLATT_PREVIEW_PATH: ${{ vars.VOMBLATT_PREVIEW_PATH }}
+      PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
+      URL: ${{ needs.prerequisites.outputs.preview_base }}/pr-${{ github.event.pull_request.number }}/
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci && npm run build
+      - name: SSH key
+        run: .github/scripts/ssh-setup.sh
+      - name: Upload
+        run: .github/scripts/upload-dir.sh dist "$DEPLOY_USER@$DEPLOY_HOST" "$SERVER_DIR/$VOMBLATT_PREVIEW_PATH/pr-$PULL_REQUEST_NUMBER"
+      - name: Live check
+        run: curl -fsS --retry 3 --retry-delay 5 "$URL" | grep -q '<title>Vomblatt' && echo "Live at $URL"
+      - name: PR comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIEW_STATUS: deployed
+          PREVIEW_URL: ${{ env.URL }}
+          DEPLOYED_COMMIT: ${{ github.event.pull_request.head.sha }}
+        run: .github/scripts/preview-comment.sh
+
+  remove-preview:
+    name: Remove preview
+    needs: prerequisites
+    if: needs.prerequisites.outputs.preview == 'true' && github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER || 'root' }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      VOMBLATT_PREVIEW_PATH: ${{ vars.VOMBLATT_PREVIEW_PATH }}
+      PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: SSH key
+        run: .github/scripts/ssh-setup.sh
+      - name: Delete directory
+        run: ssh "$DEPLOY_USER@$DEPLOY_HOST" "rm -rf '$SERVER_DIR/$VOMBLATT_PREVIEW_PATH/pr-$PULL_REQUEST_NUMBER'"
+      - name: Deactivate environment
+        run: |
+          for id in $(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=preview-pr-$PULL_REQUEST_NUMBER&per_page=100" --jq '.[].id'); do
+            gh api --method POST "repos/$GITHUB_REPOSITORY/deployments/$id/statuses" -f state=inactive -f description='Preview removed' --silent
+          done
+      - name: PR comment
+        env:
+          PREVIEW_STATUS: removed
+        run: .github/scripts/preview-comment.sh

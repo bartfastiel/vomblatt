@@ -1,0 +1,6 @@
+#!/bin/sh
+# Before every commit: lint, typecheck, unit tests (fast enough, hence all of them).
+set -e
+npm run --silent lint
+npm run --silent typecheck
+npx vitest run --silent

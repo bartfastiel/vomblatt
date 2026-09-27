@@ -1,0 +1,79 @@
+/* Mobile-first: one screen, one job – take a photo. */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background: #14172a;
+  color: #f4f1ea;
+  font:
+    16px/1.4 system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+}
+
+#app {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 24px;
+  text-align: center;
+}
+
+.photo-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 360px;
+  padding: 28px 20px;
+  border-radius: 16px;
+  background: #2b3a67;
+  color: #f4f1ea;
+  font-size: 1.25rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 10px 26px rgb(0 0 0 / 0.35);
+}
+
+.photo-button:active {
+  background: #3a4c85;
+}
+
+.photo-button input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: 360px;
+}
+
+.preview img {
+  max-width: 100%;
+  border-radius: 12px;
+}
+
+.preview p {
+  margin: 0;
+  color: #b9bdd6;
+}
