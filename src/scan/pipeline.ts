@@ -72,11 +72,11 @@ export const recognizeGray = (input: GrayImage): Recognition => {
   const heads = findHeads({ original: binary, clean, solid, distance: distanceToPaper(solid) }, staves);
   const verticals = findVerticals(clean, Math.max(3, Math.round(0.42 * spacing)), Math.round(spacing));
   const labeled = connectedComponents(clean);
-  const headers = staves.map((staff) => readHeader(labeled, binary.width, staff));
+  const headers = staves.map((staff) => readHeader({ clean, labeled, verticals }, staff));
   const readings = staves.map((staff, i) =>
     readStaff(
       staff,
-      headers[i] ?? { clef: null, keyFifths: null, digits: [], end: staff.x0 },
+      headers[i] ?? { clef: null, keyFifths: null, meter: false, end: staff.x0 },
       heads.filter((head) => head.staff === i),
       { clean, labeled, verticals },
     ),

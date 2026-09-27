@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { expect, it } from 'vitest';
 import type { Note, Voice } from '../../src/score/score';
 import { decodePgm } from '../../src/scan/__fixtures__/fixtures';
-import { SCREEN_VARIANTS } from '../../src/scan/__fixtures__/variants';
+import { PHONE_SCREEN_VARIANTS } from '../../src/scan/__fixtures__/variants';
 import { recognizeGray } from '../../src/scan/pipeline';
 import type { GrayImage } from '../../src/scan/raster';
 
@@ -30,6 +30,10 @@ const names = (notes: readonly Note[]): string => notes.map(nameOf).join(' ');
 // Known melodies (pitch names only) for the images that show one
 const KNOWN: Record<string, string> = {
   'entchen-melodie-cc': 'C D E F G G A A A A G A A A A G F F F F E E D D D D C',
+  'haenschen-klein-melodie-ccbysa':
+    'G E E F D D C D E F G G G G E E F D D C E G G C D D D D D E F E E E E E F G G E E F D D C E G G C',
+  'haenschen-klein-melodie-pd':
+    'G E E F D D C D E F G G G G E E F D D C E G G C D D D D D E F E E E E E F G G E E F D D C E G G C',
 };
 
 const similarity = (a: string, b: string): number => {
@@ -68,11 +72,12 @@ it('reads the real-world images', () => {
     log(`${real} missing – skipped`);
     return;
   }
-  for (const file of readdirSync(real).filter((f) => f.endsWith('.pgm'))) {
+  const only = process.env.EVAL_ONLY;
+  for (const file of readdirSync(real).filter((f) => f.endsWith('.pgm') && (only === undefined || f.includes(only)))) {
     const name = file.replace('.pgm', '');
     const image = decodePgm(readFileSync(join(real, file)));
     run(name, 'as is', image);
-    for (const variant of SCREEN_VARIANTS.slice(0, 2)) run(name, variant.name, variant.render(image));
+    for (const variant of PHONE_SCREEN_VARIANTS) run(name, variant.name, variant.render(image));
   }
   expect(lines.length).toBeGreaterThan(0);
 });

@@ -118,6 +118,37 @@ export const accidentalKind = (component: Component, labeled: Labeled, width: nu
   return stroke - component.x0 <= 0.35 * (component.x1 - component.x0) ? 'flat' : 'other';
 };
 
+// Mean width of the component's rows between two shares of its height
+const meanRowWidth = (component: Component, labeled: Labeled, width: number, from: number, to: number): number => {
+  const h = component.y1 - component.y0 + 1;
+  let sum = 0;
+  let rows = 0;
+  for (let y = component.y0 + Math.floor(from * h); y < component.y0 + Math.ceil(to * h); y++) {
+    let first = -1;
+    let last = -1;
+    for (let x = component.x0; x <= component.x1; x++) {
+      if (labeled.labels[y * width + x] !== component.id) continue;
+      if (first < 0) first = x;
+      last = x;
+    }
+    if (first >= 0) sum += last - first + 1;
+    rows++;
+  }
+  return rows === 0 ? 0 : sum / rows;
+};
+
+// A key signature symbol too blurred for its strokes to separate: a flat is a thin stem above a wide belly, a sharp
+// is about as wide at the top as at the bottom. Only for symbols already known to be in a key signature's place.
+export const keySymbolKind = (component: Component, labeled: Labeled, width: number, spacing: number): GlyphKind => {
+  const precise = accidentalKind(component, labeled, width, spacing);
+  if (precise !== 'other') return precise;
+  const { w, h } = boxOf(component, spacing);
+  if (!between(h, 1.4, 3.8) || !between(w, 0.35, 1.6)) return 'other';
+  const upper = meanRowWidth(component, labeled, width, 0.05, 0.35);
+  const lower = meanRowWidth(component, labeled, width, 0.65, 0.95);
+  return upper < 0.55 * lower ? 'flat' : 'sharp';
+};
+
 // The clef at the start of a staff: tall; the treble clef reaches beyond both outer lines, the bass clef hangs from
 // the top line
 export const clefKind = (component: Component, staff: Staff, spacing: number): GlyphKind => {

@@ -10,7 +10,10 @@ import { decodePgm, readScore, readSheet } from '../../src/scan/__fixtures__/fix
 import { describeNotes, scoreAccuracy } from '../../src/scan/__fixtures__/metrics';
 import { ALL_VARIANTS } from '../../src/scan/__fixtures__/variants';
 import type { BinaryImage } from '../../src/scan/binarize';
+import { accidentalKind, boxOf, strokesOf } from '../../src/scan/glyphs';
 import { type Recognition, recognizeGray } from '../../src/scan/pipeline';
+import { restOf } from '../../src/scan/rests';
+import { looseComponents } from '../../src/scan/staff-reader';
 import type { GrayImage } from '../../src/scan/raster';
 
 const out = process.env.EVAL_OUT ?? tmpdir();
@@ -38,8 +41,24 @@ const input = (): GrayImage => {
 const logStaves = (result: Recognition): void => {
   for (const { staff, header, barlines } of result.readings) {
     log('staff', staff.x0, staff.x1, 'knots', staff.knots.length, 'clef', header.clef, 'key', header.keyFifths);
-    log('  header end', header.end, 'digits', header.digits.length, 'bars', barlines.map(Math.round).join(','));
+    log('  header end', header.end, 'meter', header.meter, 'bars', barlines.map(Math.round).join(','));
   }
+};
+
+const logLoose = (result: Recognition): void => {
+  result.readings.forEach((reading) => {
+    const notes = reading.events.flatMap((e) => (e.kind === 'note' ? [e] : []));
+    const sp = reading.staff.spacing;
+    for (const c of looseComponents(reading.staff, reading.header, result.labeled, notes)) {
+      const { w, h, fill } = boxOf(c, sp);
+      if (w < 0.25 && h < 0.25) continue;
+      const rest = restOf(c, result.labeled, result.clean.width, reading.staff);
+      const kind = accidentalKind(c, result.labeled, result.clean.width, sp);
+      const strokes = strokesOf(c, result.labeled, result.clean.width, 0.6).length;
+      const box = `${String(c.x0)},${String(c.y0)} w${w.toFixed(2)} h${h.toFixed(2)} f${fill.toFixed(2)} s${String(strokes)}`;
+      log('  loose', box, kind, rest === null ? '' : `rest ${String(rest.duration)}`);
+    }
+  });
 };
 
 const logCrop = (image: BinaryImage, crop: string): void => {
@@ -73,6 +92,7 @@ it('logs what the pipeline reads', () => {
   log('ms', (performance.now() - t0).toFixed(0), 'scale', result.scale.toFixed(3), 'angle', result.angle);
   writePgm('clean.pgm', { ...result.clean, data: result.clean.data.map((v) => (v === 1 ? 0 : 255)) });
   logStaves(result);
+  if (process.env.EVAL_LOOSE !== undefined) logLoose(result);
   if (process.env.EVAL_CROP !== undefined) logCrop(result.clean, process.env.EVAL_CROP);
   logScore(result);
   expect(lines.length).toBeGreaterThan(0);

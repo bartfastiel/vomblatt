@@ -16,7 +16,7 @@ export const straightStaff = (top: number, x0 = 0, x1 = 1000): Staff => ({
   lines: [0, 1, 2, 3, 4].map((line) => Float32Array.from([top + line * SPACING, top + line * SPACING])),
 });
 
-export const HEADER: Header = { clef: 'treble', keyFifths: 0, digits: [], end: 0 };
+export const HEADER: Header = { clef: 'treble', keyFifths: 0, meter: false, end: 0 };
 
 export const head = (x: number, step: number, staffTop = 100, extra: Partial<NoteHead> = {}): NoteHead => ({
   x,
@@ -25,6 +25,7 @@ export const head = (x: number, step: number, staffTop = 100, extra: Partial<Not
   step,
   filled: true,
   uncertain: false,
+  thickness: 5,
   ...extra,
 });
 

@@ -121,7 +121,21 @@ const groupByStem = (heads: readonly Head[], verticals: readonly Vertical[], spa
     pending = rest;
   }
   for (const head of pending) byStem.set(head, { heads: [head], stem: null });
-  return [...byStem.values()];
+  return [...byStem.values()].flatMap((group) => oneEnd(group, spacing));
+};
+
+// A stem carries its heads at one end; a "head" at the other end is the thick part of a flag – the thinner one goes
+const oneEnd = (group: Group, spacing: number): Group[] => {
+  const { stem } = group;
+  if (stem === null || group.heads.length < 2) return [group];
+  const middle = (stem.vertical.y0 + stem.vertical.y1) / 2;
+  const top = group.heads.filter((h) => h.y < middle - spacing);
+  const bottom = group.heads.filter((h) => h.y > middle + spacing);
+  if (top.length === 0 || bottom.length === 0) return [group];
+  const thickest = (heads: readonly Head[]): number => Math.max(...heads.map((h) => h.thickness));
+  const keep = thickest(top) > thickest(bottom) ? top : bottom;
+  const inner = group.heads.filter((h) => !top.includes(h) && !bottom.includes(h));
+  return [{ heads: [...keep, ...inner], stem: { ...stem, up: keep === bottom } }];
 };
 
 // A head right beside (a second) or on top of a head of the group, on the side away from the stem's tip
@@ -165,7 +179,12 @@ const overlaps = (c: Component, x0: number, y0: number, x1: number, y1: number):
   c.x0 <= x1 && c.x1 >= x0 && c.y0 <= y1 && c.y1 >= y0;
 
 // The pieces of this staff after its header that are part of no note
-const looseComponents = (staff: Staff, header: Header, labeled: Labeled, notes: readonly NoteEvent[]): Component[] => {
+export const looseComponents = (
+  staff: Staff,
+  header: Header,
+  labeled: Labeled,
+  notes: readonly NoteEvent[],
+): Component[] => {
   const { spacing } = staff;
   return labeled.components.filter((c) => {
     const x = (c.x0 + c.x1) / 2;
@@ -181,11 +200,22 @@ const looseComponents = (staff: Staff, header: Header, labeled: Labeled, notes: 
   });
 };
 
+// A filled head without a stem at the far end of another note's stem is the thick end of a beam or flag
+const dropStemTips = (groups: readonly Group[], spacing: number): Group[] => {
+  const stems = groups.flatMap((g) => (g.stem === null ? [] : [g.stem]));
+  const atTip = (head: Head): boolean =>
+    stems.some(({ vertical, up }) => {
+      const end = up ? vertical.y0 : vertical.y1;
+      return Math.abs(head.x - vertical.x) <= spacing && Math.abs(head.y - end) <= 1.2 * spacing;
+    });
+  return groups.filter((g) => g.stem !== null || !g.heads.every((head) => head.filled && atTip(head)));
+};
+
 export const readStaff = (staff: Staff, header: Header, heads: readonly Head[], page: Page): StaffReading => {
   const { spacing } = staff;
   const { labeled, clean, verticals } = page;
   const own = heads.filter((head) => head.x - 0.5 * spacing > header.end);
-  const groups = groupByStem(own, verticals, spacing);
+  const groups = dropStemTips(groupByStem(own, verticals, spacing), spacing);
   const bare: NoteEvent[] = groups.map((g) => noteOf(g, { page, spacing, specks: [], accidentals: [] }));
   const loose = looseComponents(staff, header, labeled, bare);
   const accidentals = accidentalsOf(labeled, clean.width, loose, spacing);

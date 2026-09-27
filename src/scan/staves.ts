@@ -177,32 +177,75 @@ const median = (values: readonly number[]): number => {
   return numberAt(sorted, Math.floor(sorted.length / 2));
 };
 
-// Whether at least four of the five lines have ink at column x
-const linesPresent = (image: BinaryImage, staff: Staff, x: number): boolean => {
-  let present = 0;
-  const reach = Math.max(1, Math.round(staff.thickness));
-  for (let line = 0; line < 5; line++) {
-    const y = Math.round(lineY(staff, line, x));
-    for (let dy = -reach; dy <= reach; dy++) {
-      if (image.data[(y + dy) * image.width + x] === 1) {
-        present++;
-        break;
-      }
+// Centre of the thin ink run nearest to row `predicted` in column x (within ±window), or null
+const thinRunNear = (image: BinaryImage, x: number, predicted: number, window: number, maxRun: number) => {
+  let best: number | null = null;
+  let y = Math.max(0, Math.round(predicted) - window);
+  const last = Math.min(image.height - 1, Math.round(predicted) + window);
+  while (y <= last) {
+    if (image.data[y * image.width + x] !== 1) {
+      y++;
+      continue;
     }
+    let top = y;
+    while (top > 0 && image.data[(top - 1) * image.width + x] === 1) top--;
+    const end = inkRunDown(image, x, y);
+    const centre = (top + end - 1) / 2;
+    if (end - top <= maxRun && (best === null || Math.abs(centre - predicted) < Math.abs(best - predicted))) {
+      best = centre;
+    }
+    y = end;
   }
-  return present >= 4;
+  return best;
 };
 
-// Walks from `from` in `direction` while the lines continue (gaps up to half a spacing, e.g. a bar line gap)
-const extentFrom = (image: BinaryImage, staff: Staff, from: number, direction: 1 | -1): number => {
-  const maxGap = Math.max(2, Math.round(0.5 * staff.spacing));
+interface Extension {
+  readonly end: number; // last column where the lines were seen
+  readonly knots: { x: number; ys: number[] }[]; // support points found on the way
+}
+
+// Follows the five lines beyond the outermost knot, column by column: where at least three lines show a thin run
+// near their course the staff goes on (the course adapts, so a staff seen in perspective is followed); gaps of up to
+// a line distance and a half (a bar line, a head on a line, moiré dashes) are bridged
+const follow = (image: BinaryImage, staff: Staff, from: number, direction: 1 | -1): Extension => {
+  const { spacing } = staff;
+  const window = Math.max(2, Math.round(0.2 * spacing));
+  const maxRun = Math.max(2, Math.round(0.3 * spacing));
+  const maxGap = Math.round(1.5 * spacing);
+  const offsets = [0, 0, 0, 0, 0];
+  const knots: { x: number; ys: number[] }[] = [];
   let x = Math.round(from);
-  let last = x;
-  while (x >= 0 && x < image.width && Math.abs(x - last) <= maxGap) {
-    if (linesPresent(image, staff, x)) last = x;
+  let end = x;
+  while (x >= 0 && x < image.width && Math.abs(x - end) <= maxGap) {
+    const found = offsets.map((offset, line) => {
+      const model = lineY(staff, line, x);
+      const y = thinRunNear(image, x, model + offset, window, maxRun);
+      return y === null ? null : y - model;
+    });
+    if (found.filter((f) => f !== null).length >= 3) {
+      found.forEach((f, line) => {
+        if (f !== null) offsets[line] = 0.8 * (offsets[line] ?? 0) + 0.2 * f;
+      });
+      end = x;
+      if (Math.abs(x - from) >= (knots.length + 1) * 2 * spacing) {
+        knots.push({ x, ys: offsets.map((offset, line) => lineY(staff, line, x) + offset) });
+      }
+    }
     x += direction;
   }
-  return last;
+  return { end, knots };
+};
+
+const withKnots = (staff: Staff, added: readonly { x: number; ys: number[] }[]): Staff => {
+  const all = [
+    ...Array.from(staff.knots, (x, i) => ({ x, ys: staff.lines.map((line) => floatAt(line, i)) })),
+    ...added,
+  ].sort((a, b) => a.x - b.x);
+  return {
+    ...staff,
+    knots: Float32Array.from(all.map((k) => k.x)),
+    lines: [0, 1, 2, 3, 4].map((line) => Float32Array.from(all.map((k) => numberAt(k.ys, line)))),
+  };
 };
 
 const staffOf = (chain: readonly StripStaff[], image: BinaryImage, thickness: number): Staff => {
@@ -210,9 +253,9 @@ const staffOf = (chain: readonly StripStaff[], image: BinaryImage, thickness: nu
   const lines = [0, 1, 2, 3, 4].map((line) => Float32Array.from(chain.map((s) => numberAt(s.ys, line))));
   const spacing = median(chain.map((s) => (numberAt(s.ys, 4) - numberAt(s.ys, 0)) / 4));
   const draft: Staff = { spacing, thickness, x0: 0, x1: image.width - 1, knots, lines };
-  const first = floatAt(knots, 0);
-  const last = floatAt(knots, knots.length - 1);
-  return { ...draft, x0: extentFrom(image, draft, first, -1), x1: extentFrom(image, draft, last, 1) };
+  const left = follow(image, draft, floatAt(knots, 0), -1);
+  const right = follow(image, draft, floatAt(knots, knots.length - 1), 1);
+  return { ...withKnots(draft, [...left.knots, ...right.knots]), x0: left.end, x1: right.end };
 };
 
 export const findStaves = (image: BinaryImage, spacing: number, thickness: number): Staff[] => {

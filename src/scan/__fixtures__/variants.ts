@@ -9,11 +9,17 @@ export interface Variant {
   readonly render: (sheet: GrayImage) => GrayImage;
 }
 
-const screen = (tilt: number, keystone: number, glare: number, seed: number, screenPixels = 700): Variant => ({
+const screen = (
+  tilt: number,
+  keystone: number,
+  glare: number,
+  seed: number,
+  screenPixels = 700,
+  width = 1600,
+): Variant => ({
   name: `screen ${String(tilt)}° k${String(keystone)} g${String(glare)} s${String(seed)} px${String(screenPixels)}`,
   render: (sheet) => {
-    const width = 1600;
-    const height = 1200;
+    const height = Math.round(0.75 * width);
     return simulateScreenPhoto(sheet, {
       width,
       height,
@@ -38,6 +44,13 @@ export const SCREEN_VARIANTS: readonly Variant[] = [
   screen(5, 0.08, 0.6, 2),
   screen(0, 0.1, 0.4, 4, 600),
   screen(-4, 0, 0.7, 5, 800),
+];
+
+// A phone showing the image at full width (1080 screen pixels), photographed at the working size of recognize()
+export const PHONE_SCREEN_VARIANTS: readonly Variant[] = [
+  screen(2, 0.05, 0.4, 7, 1080, 2400),
+  screen(-3, 0.08, 0.6, 8, 1080, 2400),
+  screen(6, 0.03, 0.3, 9, 1080, 2400),
 ];
 
 export const PAPER_VARIANTS: readonly Variant[] = [paper(1.5, 1), paper(-3, 2), paper(4.5, 3)];

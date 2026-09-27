@@ -2,7 +2,7 @@
 // distance thick in every direction (beams, stems, lines, rests, dots and accidentals are thinner). Each candidate
 // must look like a head (an ellipse full of ink), must stand on a staff, and beyond the staff on its ledger lines.
 import type { BinaryImage } from './binarize';
-import { numberAt } from './raster';
+import { numberAt, shortAt } from './raster';
 import { type Staff, stepAt, stepY } from './staves';
 
 export interface Head {
@@ -12,6 +12,7 @@ export interface Head {
   readonly step: number; // 0 = bottom line, one step per half spacing
   readonly filled: boolean;
   readonly uncertain: boolean; // pitch between two steps, or neither clearly filled nor clearly hollow
+  readonly thickness: number; // distance of the centre to the paper, pixels: heads are thicker than flags
 }
 
 export interface HeadImages {
@@ -202,6 +203,38 @@ const isolated = (image: BinaryImage, x: number, y: number, spacing: number): bo
   return left < 0.5 || right < 0.5;
 };
 
+// Width of the solid ink through the centre row: a head is wider than the bowl of a letter or a natural sign
+const horizontalExtent = (image: BinaryImage, x: number, y: number): number => {
+  const row = Math.round(y) * image.width;
+  let left = Math.round(x);
+  let right = left;
+  while (left > 0 && image.data[row + left - 1] === 1) left--;
+  while (right < image.width - 1 && image.data[row + right + 1] === 1) right++;
+  return right - left + 1;
+};
+
+// Ink in all four corners around the centre: a block (a half or whole rest on its line), not an ellipse
+const squareCorners = (image: BinaryImage, x: number, y: number, spacing: number): boolean =>
+  [-1, 1].every((sx) =>
+    [-1, 1].every(
+      (sy) => image.data[Math.round(y + sy * 0.28 * spacing) * image.width + Math.round(x + sx * 0.5 * spacing)] === 1,
+    ),
+  );
+
+// Width over height of the core (at least half as far from the paper as the centre): a head is an ellipse lying on
+// its side, the filled bowl of a letter or the middle of a natural sign is round
+const coreAspect = (distance: Uint16Array, width: number, x: number, y: number, d: number): number => {
+  const threshold = 1.5 * d; // half of the centre's distance, in thirds of a pixel
+  const cx = Math.round(x);
+  const cy = Math.round(y);
+  const reach = (dx: number, dy: number): number => {
+    let n = 0;
+    while (shortAt(distance, (cy + (n + 1) * dy) * width + cx + (n + 1) * dx) >= threshold) n++;
+    return n;
+  };
+  return (reach(1, 0) + reach(-1, 0) + 1) / (reach(0, 1) + reach(0, -1) + 1);
+};
+
 const headOf = (images: HeadImages, staves: readonly Staff[], c: Candidate): Head | null => {
   const staffIndex = staffOfPoint(staves, c.x, c.y);
   const staff = staves[staffIndex];
@@ -212,6 +245,8 @@ const headOf = (images: HeadImages, staves: readonly Staff[], c: Candidate): Hea
   if (inkInEllipse(images.solid, x, y, 0.5 * spacing, 0.36 * spacing, HEAD_TILT) < 0.9) return null;
   const extent = verticalExtent(images.solid, x, y);
   if (extent > 3.2 * spacing || extent < 0.72 * spacing) return null;
+  if (coreAspect(images.distance, images.solid.width, x, y, c.d) < 0.9) return null;
+  if (horizontalExtent(images.solid, x, y) < 1.05 * spacing) return null;
   if (!isolated(images.solid, x, y, spacing)) return null;
   const rawStep = stepAt(staff, x, y);
   const step = Math.round(rawStep);
@@ -219,6 +254,7 @@ const headOf = (images: HeadImages, staves: readonly Staff[], c: Candidate): Hea
   // Hollow: part of the head is a filled hole – paper in the image as it was, ink in the solid one
   const ink = inkInEllipse(images.clean, x, y, 0.45 * spacing, 0.32 * spacing, HEAD_TILT);
   const hole = 1 - ink;
+  if (hole < 0.1 && squareCorners(images.solid, x, y, spacing)) return null;
   return {
     x,
     y,
@@ -226,6 +262,7 @@ const headOf = (images: HeadImages, staves: readonly Staff[], c: Candidate): Hea
     step,
     filled: hole < 0.1,
     uncertain: Math.abs(rawStep - step) > 0.35 || (hole > 0.06 && hole < 0.14),
+    thickness: c.d,
   };
 };
 
@@ -248,5 +285,6 @@ export const findHeads = (images: HeadImages, staves: readonly Staff[]): Head[] 
     step: h.step,
     filled: h.filled,
     uncertain: h.uncertain,
+    thickness: h.thickness,
   }));
 };
