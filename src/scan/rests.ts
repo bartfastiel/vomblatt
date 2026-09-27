@@ -37,6 +37,9 @@ export const restOf = (component: Component, labeled: Labeled, width: number, st
     const duration = blockRest(component, staff);
     return rest(duration, duration === 4);
   }
+  // Quarter and eighth rests stand within the staff (shifted by at most a line distance for a second voice)
+  const inside = component.y0 >= lineY(staff, 0, x) - spacing && component.y1 <= lineY(staff, 4, x) + spacing;
+  if (!inside || Math.abs(y - middle) > 1.5 * spacing) return null;
   // A zigzag or a hooked slash: at most one long run (the quarter rest's spine), never two like a sharp or natural
   if (!between(w, 0.5, 1.5) || strokesOf(component, labeled, width, 0.6).length > 1) return null;
   if (between(h, 2.1, 3.4) && fill >= 0.25) return rest(1);

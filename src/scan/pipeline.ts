@@ -71,7 +71,7 @@ export const recognizeGray = (input: GrayImage, rejected?: RejectReport): Recogn
   const verticals = findVerticals(clean, Math.max(3, Math.round(0.42 * spacing)), Math.round(spacing));
   const labeled = connectedComponents(clean);
   const headers = staves.map((staff) => readHeader({ clean, labeled, verticals }, staff));
-  const readings = staves.map((staff, i) =>
+  const all = staves.map((staff, i) =>
     readStaff(
       staff,
       headers[i] ?? { clef: null, keyFifths: null, meter: false, end: staff.x0 },
@@ -79,12 +79,28 @@ export const recognizeGray = (input: GrayImage, rejected?: RejectReport): Recogn
       { clean, labeled, verticals },
     ),
   );
+  // Five lines with nothing on them (a rule and a text block that line up by chance) are no staff
+  const kept = all.flatMap((reading, i) =>
+    reading.events.length > 0 || reading.barlines.length > 0 ? [{ reading, header: headers[i] }] : [],
+  );
+  const readings = kept.map((k) => k.reading);
+  const keptHeaders = kept.flatMap((k) => (k.header === undefined ? [] : [k.header]));
   const systems = groupSystems(
     binary,
-    staves,
-    headers,
+    readings.map((reading) => reading.staff),
+    keptHeaders,
     readings.map((reading) => reading.barlines),
   );
   const score = buildScore(readings, systems, voicesOf(systems), { keyFifths: commonKey(headers) });
-  return { labeled, clean, verticals, score, staves, readings, heads, scale: prepared.scale, angle: prepared.angle };
+  return {
+    labeled,
+    clean,
+    verticals,
+    score,
+    staves: readings.map((r) => r.staff),
+    readings,
+    heads,
+    scale: prepared.scale,
+    angle: prepared.angle,
+  };
 };
