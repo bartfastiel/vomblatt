@@ -1,4 +1,28 @@
-/* Mobile-first: one screen, one job – take a photo. */
+/* Mobile-first, one screen at a time. Light by default, dark when the system asks for it. */
+:root {
+  --bg: #f4f1ea;
+  --fg: #14172a;
+  --muted: #5b5f7a;
+  --surface: #ffffff;
+  --accent: #2b3a67;
+  --accent-fg: #f4f1ea;
+  --warning: #92400e;
+  --border: rgb(20 23 42 / 15%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14172a;
+    --fg: #f4f1ea;
+    --muted: #b9bdd6;
+    --surface: #1d2140;
+    --accent: #3a4c85;
+    --accent-fg: #f4f1ea;
+    --warning: #f5a524;
+    --border: rgb(244 241 234 / 18%);
+  }
+}
+
 * {
   box-sizing: border-box;
 }
@@ -10,8 +34,8 @@ body {
 }
 
 body {
-  background: #14172a;
-  color: #f4f1ea;
+  background: var(--bg);
+  color: var(--fg);
   font:
     16px/1.4 system-ui,
     -apple-system,
@@ -25,31 +49,72 @@ body {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
+}
+
+#app > main {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 24px;
+  gap: 20px;
   padding: 24px;
   text-align: center;
 }
 
-.photo-button {
+.app-header h1 {
+  margin: 0 0 4px;
+  font-size: 1.5rem;
+}
+
+.build-info {
+  flex-shrink: 0;
+  padding: 6px 12px 10px;
+  text-align: center;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+/* One screen visible at a time; `hidden` alone would be overridden by the flex rule below. */
+.screen {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+  max-width: 420px;
+}
+
+.screen:not([hidden]) {
+  display: flex;
+}
+
+.screen--score {
+  max-width: 640px;
+}
+
+.photo-button,
+.play-button {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
   max-width: 360px;
-  padding: 28px 20px;
+  padding: 26px 20px;
+  border: none;
   border-radius: 16px;
-  background: #2b3a67;
-  color: #f4f1ea;
-  font-size: 1.25rem;
-  font-weight: 600;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 1.2rem;
+  font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 10px 26px rgb(0 0 0 / 0.35);
+  box-shadow: 0 10px 26px rgb(0 0 0 / 25%);
 }
 
-.photo-button:active {
-  background: #3a4c85;
+.photo-button:active,
+.play-button:active {
+  opacity: 0.85;
 }
 
 .photo-button input {
@@ -60,20 +125,156 @@ body {
   clip: rect(0 0 0 0);
 }
 
-.preview {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
+.link-button {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 1rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.secondary-button {
+  min-height: 48px;
+  padding: 12px 22px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: none;
+  color: var(--fg);
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.hint {
+  margin: 0;
+  color: var(--warning);
+  font-size: 0.9rem;
   max-width: 360px;
 }
 
-.preview img {
-  max-width: 100%;
-  border-radius: 12px;
+.hint-small {
+  margin: -10px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
 }
 
-.preview p {
-  margin: 0;
-  color: #b9bdd6;
+.score-container {
+  width: 100%;
+  overflow-x: auto;
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 8px;
+}
+
+.score {
+  display: block;
+}
+
+.staff-line,
+.bar-line {
+  stroke: var(--fg);
+  stroke-width: 1;
+  opacity: 0.55;
+}
+
+.notehead {
+  fill: var(--fg);
+}
+
+.notehead--hollow {
+  fill: none;
+  stroke: var(--fg);
+  stroke-width: 1.6;
+}
+
+.stem,
+.flag {
+  fill: none;
+  stroke: var(--fg);
+  stroke-width: 1.4;
+}
+
+.dot,
+.rest {
+  fill: var(--fg);
+}
+
+.cursor {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.note--other .notehead,
+.note--other .notehead--hollow,
+.note--other .stem,
+.note--other .flag,
+.note--other .dot,
+.note--other .rest {
+  opacity: 0.35;
+}
+
+.note--uncertain .notehead,
+.note--uncertain .rest,
+.note--uncertain .dot {
+  fill: var(--warning);
+}
+
+.note--uncertain .notehead--hollow,
+.note--uncertain .stem,
+.note--uncertain .flag {
+  stroke: var(--warning);
+}
+
+.voice-picker {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.voice-button {
+  min-width: 64px;
+  min-height: 48px;
+  padding: 10px 18px;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--fg);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.voice-button--chosen {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1rem;
+}
+
+.toggle input[type='checkbox'] {
+  width: 22px;
+  height: 22px;
+}
+
+.tempo-control {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 320px;
+  font-size: 1rem;
+}
+
+.tempo-control input[type='range'] {
+  width: 100%;
+  height: 32px;
 }
