@@ -13,9 +13,10 @@ sheet of music, and the app plays it back.
 
 ## State
 
-Scaffold only. The app currently shows one button, "Notenblatt fotografieren" (photograph a sheet of music); after a
-photo is taken it is shown back with a note that recognition is still to come. The real feature – turning the photo
-into a melody the phone can sing – follows in later PRs, together with its own ADRs.
+The player and its UI are in place: photograph a sheet of music (or tap "Beispiel anhören" for a demo), see it
+re-rendered as a small staff with the recognised notes, choose a voice (S/A/T/B), and play it back – slower, looped,
+starting wherever you tap. Recognition itself (`src/scan/`) is still a stub that always returns the demo score,
+which the score view says plainly. Installable to the home screen and usable offline after the first load.
 
 ## Development
 
