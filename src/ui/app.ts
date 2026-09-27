@@ -6,6 +6,7 @@ import { createScoreView } from './score-view';
 import { loadLastVoice, saveLastVoice } from './storage';
 import { createTapTempo } from '../audio/tap-tempo';
 import { formatBuildStamp } from '../format/build-info';
+import { followScrollLeft } from '../render/follow-scroll';
 import { recognize } from '../scan/recognize';
 import { demoScore } from '../score/demo';
 import { VOICES } from '../score/score';
@@ -17,6 +18,7 @@ const MIN_TEMPO = 30; // quarter notes per minute
 const MAX_TEMPO = 200;
 const TEMPO_STEP = 1;
 const DEFAULT_TEMPO = 80; // quarter notes per minute, when the score itself gives none
+const SCROLL_FOLLOW_EPSILON = 1.5; // px; a scroll further than this from where we last put it is the user's own
 
 const SCREEN_HTML = `
   <main>
@@ -121,6 +123,8 @@ export const startApp = (root: HTMLElement): void => {
   let playing = false;
   let cursorFrame: number | null = null;
   let tempo = DEFAULT_TEMPO;
+  let followCursor = true; // false once the user has scrolled the score container by hand while playing
+  let lastAutoScrollLeft = 0; // what we last set scoreContainer.scrollLeft to, to tell our own scrolling from theirs
 
   const playbackOptions = () => ({
     voice,
@@ -137,6 +141,27 @@ export const startApp = (root: HTMLElement): void => {
     }
   };
 
+  // Keeps the cursor centred in the score container, except at either end of the content where centring it
+  // would scroll past the edge (src/render/follow-scroll.ts has the maths). Marks the result as our own doing
+  // so the 'scroll' listener below does not mistake it for the user scrolling by hand.
+  const updateScroll = (quarter: number): void => {
+    const target = followScrollLeft(
+      scoreView.xForQuarter(quarter),
+      scoreContainer.clientWidth,
+      scoreContainer.scrollWidth,
+    );
+    lastAutoScrollLeft = target;
+    scoreContainer.scrollLeft = target;
+  };
+
+  // Called whenever playback (re)starts, i.e. exactly the moments after which the customer wants following
+  // resumed: pressing "Abspielen" and any restart of an already-running playback (tempo/voice/loop change, or
+  // tapping a new start position while playing – restartIfPlaying below covers all of those).
+  const resumeFollowing = (): void => {
+    followCursor = true;
+    updateScroll(startQuarter);
+  };
+
   const tickCursor = (): void => {
     if (!engine.isPlaying()) {
       playing = false;
@@ -145,7 +170,9 @@ export const startApp = (root: HTMLElement): void => {
       stopCursorLoop();
       return;
     }
-    scoreView.setCursor(engine.currentQuarter());
+    const quarter = engine.currentQuarter();
+    scoreView.setCursor(quarter);
+    if (followCursor && quarter !== null) updateScroll(quarter);
     cursorFrame = requestAnimationFrame(tickCursor);
   };
 
@@ -153,7 +180,14 @@ export const startApp = (root: HTMLElement): void => {
     if (!playing || score === null) return;
     startQuarter = engine.currentQuarter() ?? startQuarter;
     engine.play(score, playbackOptions());
+    resumeFollowing();
   };
+
+  // A scroll that does not match what we ourselves just set must be the user dragging the score by hand;
+  // playback keeps running but stops being followed until it is (re)started or a new start position is tapped.
+  scoreContainer.addEventListener('scroll', () => {
+    if (Math.abs(scoreContainer.scrollLeft - lastAutoScrollLeft) > SCROLL_FOLLOW_EPSILON) followCursor = false;
+  });
 
   const setTempo = (value: number): void => {
     tempo = Math.min(MAX_TEMPO, Math.max(MIN_TEMPO, Math.round(value)));
@@ -198,6 +232,9 @@ export const startApp = (root: HTMLElement): void => {
 
     scoreView.render(result, voice);
     scoreView.setCursor(0);
+    followCursor = true;
+    lastAutoScrollLeft = 0;
+    scoreContainer.scrollLeft = 0;
     scoreView.onTap((quarter) => {
       startQuarter = quarter;
       scoreView.setCursor(quarter);
@@ -242,6 +279,7 @@ export const startApp = (root: HTMLElement): void => {
       scoreView.setCursor(startQuarter);
     } else {
       engine.play(score, playbackOptions());
+      resumeFollowing();
       playing = true;
       playButton.textContent = 'Pause';
       stopCursorLoop();
