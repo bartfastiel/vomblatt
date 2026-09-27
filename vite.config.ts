@@ -12,7 +12,16 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'lcov'],
       include: ['src/**'],
-      exclude: ['src/ui/**', 'src/main.ts', '**/*.test.ts', 'src/**/*.d.ts', 'src/**/__fixtures__/**'],
+      // The worker glue and the entry point need a browser (Worker, OffscreenCanvas, createImageBitmap)
+      exclude: [
+        'src/ui/**',
+        'src/main.ts',
+        'src/scan/worker.ts',
+        'src/scan/recognize.ts',
+        '**/*.test.ts',
+        'src/**/*.d.ts',
+        'src/**/__fixtures__/**',
+      ],
       thresholds: { lines: 90, branches: 90, functions: 90, statements: 90 },
     },
   },

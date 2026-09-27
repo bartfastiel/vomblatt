@@ -1,0 +1,35 @@
+{
+  "voices": {
+    "S": [
+      { "midi": 60, "start": 0, "duration": 1, "bar": 1 },
+      { "midi": 62, "start": 1, "duration": 1, "bar": 1 },
+      { "midi": 64, "start": 2, "duration": 1, "bar": 1 },
+      { "midi": 65, "start": 3, "duration": 1, "bar": 1 },
+      { "midi": 67, "start": 4, "duration": 2, "bar": 2 },
+      { "midi": 67, "start": 6, "duration": 2, "bar": 2 },
+      { "midi": 69, "start": 8, "duration": 1, "bar": 3 },
+      { "midi": 69, "start": 9, "duration": 1, "bar": 3 },
+      { "midi": 69, "start": 10, "duration": 1, "bar": 3 },
+      { "midi": 69, "start": 11, "duration": 1, "bar": 3 },
+      { "midi": 67, "start": 12, "duration": 4, "bar": 4 },
+      { "midi": 69, "start": 16, "duration": 1, "bar": 5 },
+      { "midi": 69, "start": 17, "duration": 1, "bar": 5 },
+      { "midi": 69, "start": 18, "duration": 1, "bar": 5 },
+      { "midi": 69, "start": 19, "duration": 1, "bar": 5 },
+      { "midi": 67, "start": 20, "duration": 4, "bar": 6 },
+      { "midi": 65, "start": 24, "duration": 1, "bar": 7 },
+      { "midi": 65, "start": 25, "duration": 1, "bar": 7 },
+      { "midi": 65, "start": 26, "duration": 1, "bar": 7 },
+      { "midi": 65, "start": 27, "duration": 1, "bar": 7 },
+      { "midi": 64, "start": 28, "duration": 2, "bar": 8 },
+      { "midi": 64, "start": 30, "duration": 2, "bar": 8 },
+      { "midi": 62, "start": 32, "duration": 1, "bar": 9 },
+      { "midi": 62, "start": 33, "duration": 1, "bar": 9 },
+      { "midi": 62, "start": 34, "duration": 1, "bar": 9 },
+      { "midi": 62, "start": 35, "duration": 1, "bar": 9 },
+      { "midi": 60, "start": 36, "duration": 4, "bar": 10 }
+    ]
+  },
+  "beatsPerBar": 4,
+  "keyFifths": 0
+}

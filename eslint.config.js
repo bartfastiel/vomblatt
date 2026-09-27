@@ -20,10 +20,22 @@ export default defineConfig(
     },
   },
   { files: ['**/*.js', '**/*.mjs'], extends: [tseslint.configs.disableTypeChecked] },
-  // The tools are Node scripts without a tsconfig
+  // The tools are Node scripts without a tsconfig; some run code in Playwright's browser page
   {
     files: ['tools/**/*.mjs'],
-    languageOptions: { globals: { Buffer: 'readonly', console: 'readonly', process: 'readonly' } },
+    languageOptions: {
+      globals: {
+        Buffer: 'readonly',
+        console: 'readonly',
+        process: 'readonly',
+        btoa: 'readonly',
+        createImageBitmap: 'readonly',
+        document: 'readonly',
+        fetch: 'readonly',
+        Image: 'readonly',
+        OffscreenCanvas: 'readonly',
+      },
+    },
   },
   prettier,
 );

@@ -1,0 +1,45 @@
+// The distortions every fixture is read under: clean, simulated screen photos (moiré, glare, perspective) and
+// simulated camera photos of paper (rotation, shadow, blur, noise, perspective).
+import { simulatePhoto } from '../photo-simulation';
+import type { GrayImage } from '../raster';
+import { screenQuad, simulateScreenPhoto } from '../screen-photo';
+
+export interface Variant {
+  readonly name: string;
+  readonly render: (sheet: GrayImage) => GrayImage;
+}
+
+const screen = (tilt: number, keystone: number, glare: number, seed: number, screenPixels = 700): Variant => ({
+  name: `screen ${String(tilt)}° k${String(keystone)} g${String(glare)} s${String(seed)} px${String(screenPixels)}`,
+  render: (sheet) => {
+    const width = 1600;
+    const height = 1200;
+    return simulateScreenPhoto(sheet, {
+      width,
+      height,
+      screen: screenQuad(width, height, sheet.height / sheet.width, { tilt, keystone, cover: 0.85 }),
+      screenPixels,
+      glare,
+      seed,
+    });
+  },
+});
+
+const paper = (angle: number, seed: number): Variant => ({
+  name: `paper ${String(angle)}° s${String(seed)}`,
+  render: (sheet) => simulatePhoto(sheet, { angle, seed }),
+});
+
+export const CLEAN: Variant = { name: 'clean', render: (sheet) => sheet };
+
+export const SCREEN_VARIANTS: readonly Variant[] = [
+  screen(3, 0.06, 0.5, 3),
+  screen(-2, 0.04, 0.3, 1),
+  screen(5, 0.08, 0.6, 2),
+  screen(0, 0.1, 0.4, 4, 600),
+  screen(-4, 0, 0.7, 5, 800),
+];
+
+export const PAPER_VARIANTS: readonly Variant[] = [paper(1.5, 1), paper(-3, 2), paper(4.5, 3)];
+
+export const ALL_VARIANTS: readonly Variant[] = [CLEAN, ...SCREEN_VARIANTS, ...PAPER_VARIANTS];
