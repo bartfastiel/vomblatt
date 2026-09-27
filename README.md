@@ -3,6 +3,8 @@
 "Vom Blatt singen" – for the choir singer who does not get a melody: open the page on your phone, photograph the
 sheet of music, and the app plays it back.
 
+<!-- chore/preview-smoke: harmless line to prove PR previews work -->
+
 [![CI](https://github.com/bartfastiel/vomblatt/actions/workflows/ci.yml/badge.svg)](https://github.com/bartfastiel/vomblatt/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/bartfastiel/vomblatt)](LICENSE)
 ![Node](https://img.shields.io/badge/node-24-339933?logo=node.js&logoColor=white)
