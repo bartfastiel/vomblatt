@@ -94,9 +94,7 @@ test('"Beispiel anhören" shows the score with voice buttons and plays without e
   expect(errors).toEqual([]);
 });
 
-test('tempo shows as BPM, the +/- buttons adjust it, and tap tempo sets it from the tap interval', async ({
-  page,
-}) => {
+test('tempo shows as BPM, the +/- buttons adjust it, and tap tempo sets it from the tap interval', async ({ page }) => {
   await page.goto('/');
   await page.getByText('Beispiel anhören').click();
 
