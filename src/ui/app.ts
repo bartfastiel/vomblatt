@@ -28,6 +28,7 @@ const SCREEN_HTML = `
         Notenblatt fotografieren
       </label>
       <button type="button" class="link-button" id="demo-button">Beispiel anhören</button>
+      <p class="hint" id="error-hint" role="alert" hidden></p>
     </section>
 
     <section class="screen" id="loading-screen" hidden>
@@ -96,6 +97,7 @@ export const startApp = (root: HTMLElement): void => {
   const photoInput = mustFind(root.querySelector<HTMLInputElement>('#photo-input'), '#photo-input');
   const demoButton = mustFind(root.querySelector<HTMLButtonElement>('#demo-button'), '#demo-button');
   const stubHint = mustFind(root.querySelector<HTMLElement>('#stub-hint'), '#stub-hint');
+  const errorHint = mustFind(root.querySelector<HTMLElement>('#error-hint'), '#error-hint');
   const scoreContainer = mustFind(root.querySelector<HTMLElement>('#score-container'), '#score-container');
   const voicePicker = mustFind(root.querySelector<HTMLElement>('#voice-picker'), '#voice-picker');
   const othersToggle = mustFind(root.querySelector<HTMLInputElement>('#others-toggle'), '#others-toggle');
@@ -213,9 +215,13 @@ export const startApp = (root: HTMLElement): void => {
     if (file === undefined) return;
     startScreen.hidden = true;
     loadingScreen.hidden = false;
+    errorHint.hidden = true;
     recognize(file)
       .then(showScore)
-      .catch(() => {
+      .catch((error: unknown) => {
+        // recognize() rejects with a German message meant for the user (e.g. no staff lines found)
+        errorHint.textContent = error instanceof Error ? error.message : 'Die Erkennung ist fehlgeschlagen.';
+        errorHint.hidden = false;
         loadingScreen.hidden = true;
         startScreen.hidden = false;
       });

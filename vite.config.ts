@@ -19,9 +19,16 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'lcov'],
       include: ['src/**'],
-      // src/scan is a stub owned by the in-progress recognition work (see src/scan/recognize.ts); it gets its own
-      // tests once real recognition lands there.
-      exclude: ['src/ui/**', 'src/main.ts', 'src/scan/**', '**/*.test.ts', 'src/**/*.d.ts', 'src/**/__fixtures__/**'],
+      // The worker glue and the entry point need a browser (Worker, OffscreenCanvas, createImageBitmap)
+      exclude: [
+        'src/ui/**',
+        'src/main.ts',
+        'src/scan/worker.ts',
+        'src/scan/recognize.ts',
+        '**/*.test.ts',
+        'src/**/*.d.ts',
+        'src/**/__fixtures__/**',
+      ],
       thresholds: { lines: 90, branches: 90, functions: 90, statements: 90 },
     },
   },
