@@ -91,3 +91,21 @@ export const simulatePhoto = (sheet: GrayImage, { angle, seed }: PhotoOptions): 
   }
   return noise(lit, seed);
 };
+
+// A page that curls towards the binding: the right part bends down and the lines there get closer, as a spiral-bound
+// songbook lies on the table. `amount` is the drop at the right edge, as a share of the height.
+export const curlPage = (sheet: GrayImage, amount: number): GrayImage => {
+  const { width, height } = sheet;
+  const data = new Uint8Array(width * height).fill(255);
+  for (let x = 0; x < width; x++) {
+    const t = Math.max(0, x / width - 0.45) / 0.55;
+    const drop = amount * height * t * t;
+    const squeeze = 1 - 0.06 * t * t;
+    for (let y = 0; y < height; y++) {
+      const sy = (y - drop) / squeeze;
+      if (sy < 0 || sy > height - 1) continue;
+      data[y * width + x] = clampByte(sampleBilinear(sheet, x, sy));
+    }
+  }
+  return { width, height, data };
+};

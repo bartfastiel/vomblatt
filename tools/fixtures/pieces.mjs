@@ -164,4 +164,26 @@ export const PIECES = [
       S: '4c 4d 4e 4f | 2g 2g | 4a 4a 4a 4a | 1g | 4f 4f 4f 4f | 2e 2e | 4g 4g 4g 4g | 1c',
     },
   },
+  {
+    // A hymn-style melody in B flat major as a spiral-bound songbook prints it, written for the tests: two flats,
+    // half notes in the spaces, eighths with flags after eighth rests, quarter rests, a tie over the bar line, a
+    // dotted half, whole notes, a double bar in the middle of a system, chord names above, three verses below
+    id: 'songbook-b-flat',
+    layout: 'hymnal',
+    key: 'b-e-',
+    keyFifths: -2,
+    meter: [4, 4],
+    font: 'Leland',
+    pageWidth: 1200,
+    scale: 80,
+    barlines: { 7: '||' },
+    verses: [HYMN_LYRICS, HYMN_LYRICS.slice(8), HYMN_LYRICS.slice(16)],
+    chords: ['B-', 'B-', 'B-', 'E-', 'E-', 'E-', 'F', 'F', 'Gm', 'Gm', 'E-', 'C', 'F', 'F', 'B-', 'E-', 'B-', 'F',
+      'F', 'F', 'F', 'F', 'F', 'F', 'F', 'B-', 'B-', 'B-', 'B-', 'B-', 'B-', 'B-'],
+    voices: {
+      S:
+        '2dd 4b- 4b- | 2b- 4g 4g | 2f 2a | 2b- 4r 4d | 2g 2e- | 2d [2c | 4c] 4r 2B- | 1e- | ' +
+        '2d 8r 8d 8e- 8f | 4f 2g 4r | 2a 8r 8a 8b- 8cc | 2.b- 4r | 1b-',
+    },
+  },
 ];

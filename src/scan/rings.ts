@@ -3,6 +3,7 @@
 // line crosses every head there.
 import type { BinaryImage } from './binarize';
 import type { Head } from './heads';
+import type { Vertical } from './verticals';
 import { stepAt, stepY, type Staff } from './staves';
 
 const TILT = -0.35;
@@ -49,6 +50,20 @@ export const ringScore = (image: BinaryImage, staff: Staff, x: number, y: number
 
 const isRing = (s: Score): boolean => s.ring >= 0.55 && s.inside <= 0.15;
 
+// A column of ink over the whole staff within a line distance and a half: a (thick) bar line, whose gap to the thin
+// one is no ring
+const nearFullColumn = (image: BinaryImage, staff: Staff, x: number): boolean => {
+  const reach = Math.round(1.5 * staff.spacing);
+  for (let xx = Math.round(x) - reach; xx <= Math.round(x) + reach; xx++) {
+    const top = Math.round(stepY(staff, xx, 8));
+    const bottom = Math.round(stepY(staff, xx, 0));
+    let ink = 0;
+    for (let y = top; y <= bottom; y++) if (image.data[y * image.width + xx] === 1) ink++;
+    if (Math.abs(xx - x) > 0.3 * staff.spacing && ink >= 0.95 * (bottom - top + 1)) return true;
+  }
+  return false;
+};
+
 // Hollow heads on a staff not yet found among `known`
 export const findRings = (
   image: BinaryImage,
@@ -56,10 +71,17 @@ export const findRings = (
   index: number,
   start: number,
   known: readonly Head[],
+  verticals: readonly Vertical[] = [],
 ): Head[] => {
   const { spacing } = staff;
   const found: (Head & { score: number })[] = [];
-  // (the score stays on the heads: harmless extra data)
+  // A bar line (a long stroke not where a stem would be) next to the ring: the gap of a double bar line or repeat
+  const byBarline = (h: Head): boolean =>
+    verticals.some((v) => {
+      const dx = Math.abs(v.x - h.x);
+      const stemPlace = Math.abs(dx - 0.6 * spacing) <= 0.3 * spacing;
+      return v.y1 - v.y0 >= 3 * spacing && dx <= 1.5 * spacing && !stemPlace && h.y >= v.y0 && h.y <= v.y1;
+    });
   for (let step = -2; step <= 10; step++) {
     for (let x = Math.round(start); x <= staff.x1; x += 2) {
       const y = stepY(staff, x, step);
@@ -84,7 +106,10 @@ export const findRings = (
   return (
     found
       // Not a found head again, and not squeezed between found ones (a flag and a stem enclose paper like a ring)
-      .filter((h) => !known.some((k) => Math.abs(k.x - h.x) < 1.6 * spacing))
+      .filter(
+        (h) =>
+          !known.some((k) => Math.abs(k.x - h.x) < 1.6 * spacing) && !byBarline(h) && !nearFullColumn(image, staff, h.x),
+      )
       .filter(
         (h) => !found.some((o) => o !== h && o.score > h.score && Math.hypot(o.x - h.x, o.y - h.y) < 0.8 * spacing),
       )

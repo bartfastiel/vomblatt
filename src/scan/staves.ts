@@ -277,5 +277,26 @@ export const findStaves = (image: BinaryImage, spacing: number, thickness: numbe
   return chainStaves(found, spacing)
     .filter((chain) => chain.length >= 2)
     .map((chain) => staffOf(chain, image, thickness))
+    .filter((staff) => lineCoverage(image, staff) >= 0.35)
     .sort((a, b) => lineY(a, 2, a.x0) - lineY(b, 2, b.x0));
+};
+
+// Share of the staff's columns where at least four of its five lines have ink: staff lines run through, lines of
+// text that happen to lie at equal distances break at every letter and word
+const lineCoverage = (image: BinaryImage, staff: Staff): number => {
+  const reach = Math.max(1, Math.round(staff.thickness));
+  let present = 0;
+  let columns = 0;
+  for (let x = Math.round(staff.x0); x <= staff.x1; x += 2) {
+    columns++;
+    let lines = 0;
+    for (let line = 0; line < 5; line++) {
+      const y = Math.round(lineY(staff, line, x));
+      let ink = false;
+      for (let dy = -reach; dy <= reach && !ink; dy++) ink = image.data[(y + dy) * image.width + x] === 1;
+      if (ink) lines++;
+    }
+    if (lines >= 4) present++;
+  }
+  return columns === 0 ? 0 : present / columns;
 };

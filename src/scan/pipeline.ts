@@ -109,7 +109,7 @@ export const recognizeGray = (input: GrayImage, rejected?: RejectReport): Recogn
   const all = staves.map((staff, i) => {
     const header = headers[i] ?? { clef: null, keyFifths: null, meter: false, end: staff.x0 };
     const own = heads.filter((head) => head.staff === i);
-    const rings = findRings(binary, staff, i, header.end + staff.spacing, own);
+    const rings = findRings(binary, staff, i, header.end + staff.spacing, own, verticals);
     return readStaff(staff, header, [...own, ...rings], { clean, labeled, verticals });
   });
   // Five lines without a clef and without a single note on a stem (text, moiré stripes that line up by chance) are

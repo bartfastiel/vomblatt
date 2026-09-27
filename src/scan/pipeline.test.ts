@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { type Score, VOICES } from '../score/score';
 import { readScore, readSheet } from './__fixtures__/fixtures';
 import { scoreAccuracy } from './__fixtures__/metrics';
-import { DESK_VARIANTS, PAPER_VARIANTS, PHONE_SCREEN_VARIANTS, SCREEN_VARIANTS } from './__fixtures__/variants';
+import {
+  CURLED_VARIANTS,
+  DESK_VARIANTS,
+  PAPER_VARIANTS,
+  PHONE_SCREEN_VARIANTS,
+  SCREEN_VARIANTS,
+} from './__fixtures__/variants';
 import { NoStaffError, recognizeGray } from './pipeline';
 
 // Simulated photos take a second or more under coverage on a slow runner
@@ -124,6 +130,34 @@ describe('recognizeGray on the "Alle meine Entchen" lead sheet', SLOW, () => {
     expect(scoreAccuracy(expected, recognizeGray(variant.render(sheet)).score).S?.pitch).toBeGreaterThanOrEqual(0.95);
     expect(notes[notes.length - 1]?.midi).toBe(60);
   });
+});
+
+// A songbook page as hymnals print it: two flats, half notes in the spaces, eighth flags after eighth rests, quarter
+// rests, a tie over the bar line, chord names above and three verses below; also photographed with the page curling
+describe('recognizeGray on the songbook page in B flat major', SLOW, () => {
+  const sheet = readSheet('songbook-b-flat');
+  const expected = readScore('songbook-b-flat');
+
+  it('reads the clean engraving with both flats and no empty bars', () => {
+    const { score } = recognizeGray(sheet);
+    const accuracy = scoreAccuracy(expected, score).S;
+    expect(score.keyFifths).toBe(-2);
+    expect(accuracy?.pitch).toBeGreaterThanOrEqual(0.8);
+    expect(accuracy?.rhythm).toBeGreaterThanOrEqual(0.8);
+    expect(score.voices.S?.at(-1)?.bar).toBe(expected.voices.S?.at(-1)?.bar);
+  });
+
+  it.each([PAPER_VARIANTS[1], ...CURLED_VARIANTS].map((v) => [v?.name, v] as const))(
+    'reads a photo of the paper page (%s)',
+    (_, variant) => {
+      if (variant === undefined) throw new Error('no variant');
+      const { score } = recognizeGray(variant.render(sheet));
+      const accuracy = scoreAccuracy(expected, score).S;
+      expect(score.keyFifths).toBe(-2);
+      expect(accuracy?.pitch).toBeGreaterThanOrEqual(0.75);
+      expect(accuracy?.rhythm).toBeGreaterThanOrEqual(0.75);
+    },
+  );
 });
 
 describe('recognizeGray without music', () => {

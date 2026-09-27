@@ -1,7 +1,7 @@
 // The distortions every fixture is read under: clean, simulated screen photos (moiré, glare, perspective) and
 // simulated camera photos of paper (rotation, shadow, blur, noise, perspective).
 import { simulateDeskPhoto } from '../desk-photo';
-import { simulatePhoto } from '../photo-simulation';
+import { curlPage, simulatePhoto } from '../photo-simulation';
 import type { GrayImage } from '../raster';
 import { screenQuad, simulateScreenPhoto } from '../screen-photo';
 
@@ -57,7 +57,15 @@ export const PHONE_SCREEN_VARIANTS: readonly Variant[] = [
   screen(6, 0.03, 0.3, 9, 1080, 2400),
 ];
 
+// A songbook page bending towards its binding, photographed
+const curled = (angle: number, amount: number, seed: number): Variant => ({
+  name: `curled page ${String(angle)}° drop ${String(amount)}`,
+  render: (sheet) => simulatePhoto(curlPage(sheet, amount), { angle, seed }),
+});
+
 export const PAPER_VARIANTS: readonly Variant[] = [paper(1.5, 1), paper(-3, 2), paper(4.5, 3)];
+
+export const CURLED_VARIANTS: readonly Variant[] = [curled(2, 0.03, 4), curled(-1.5, 0.05, 5)];
 
 // A phone lying on a desk, photographed by another phone at full camera size (as the acceptance check does it)
 const desk = (tilt: number, zoom: number, seed: number): Variant => ({
@@ -72,5 +80,6 @@ export const ALL_VARIANTS: readonly Variant[] = [
   ...SCREEN_VARIANTS,
   ...PHONE_SCREEN_VARIANTS,
   ...PAPER_VARIANTS,
+  ...CURLED_VARIANTS,
   ...DESK_VARIANTS,
 ];
