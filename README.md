@@ -50,3 +50,5 @@ in [CONTRIBUTING.md](CONTRIBUTING.md).
 Every push to `main` puts `dist/` on the server as production, served directly under its host. Every pull request
 gets a preview `pr-<nr>/` (link in the PR comment and as an environment) that disappears when the PR is closed.
 Production and previews live under separate paths.
+
+- [Roadmap](docs/roadmap.md)
