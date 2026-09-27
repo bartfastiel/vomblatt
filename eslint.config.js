@@ -37,5 +37,12 @@ export default defineConfig(
       },
     },
   },
+  // The service worker is hand-written plain JS, run in its own (ServiceWorker) global scope
+  {
+    files: ['public/sw.js'],
+    languageOptions: {
+      globals: { self: 'readonly', caches: 'readonly', fetch: 'readonly', URL: 'readonly' },
+    },
+  },
   prettier,
 );
