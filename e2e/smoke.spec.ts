@@ -93,3 +93,29 @@ test('"Beispiel anhören" shows the score with voice buttons and plays without e
 
   expect(errors).toEqual([]);
 });
+
+test('tempo shows as BPM, the +/- buttons adjust it, and tap tempo sets it from the tap interval', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await page.getByText('Beispiel anhören').click();
+
+  const tempoValue = page.locator('#tempo-value');
+  await expect(tempoValue).toHaveText('♩ = 100'); // the demo score's own tempo
+
+  await page.getByRole('button', { name: 'Schneller' }).click();
+  await expect(tempoValue).toHaveText('♩ = 101');
+  await page.getByRole('button', { name: 'Langsamer' }).click();
+  await page.getByRole('button', { name: 'Langsamer' }).click();
+  await expect(tempoValue).toHaveText('♩ = 99');
+
+  // A virtual clock makes the tap intervals exact (no dependency on real wall-clock timing in CI): four taps
+  // 500 ms apart average to a 500 ms interval, i.e. 120 BPM.
+  await page.clock.install({ time: 0 });
+  const tapButton = page.getByRole('button', { name: 'Tippen' });
+  for (let tap = 0; tap < 4; tap++) {
+    await page.clock.setFixedTime(tap * 500);
+    await tapButton.click();
+  }
+  await expect(tempoValue).toHaveText('♩ = 120');
+});
