@@ -163,6 +163,9 @@ body {
 .score-container {
   width: 100%;
   overflow-x: auto;
+  /* app.ts sets scrollLeft every animation frame while following the cursor; smooth scrolling would lag behind
+     and fight that instead of tracking it exactly. */
+  scroll-behavior: auto;
   background: var(--surface);
   border-radius: 12px;
   padding: 8px;

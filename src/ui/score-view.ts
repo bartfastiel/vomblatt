@@ -32,6 +32,9 @@ export interface ScoreView {
   readonly render: (score: Score, voice: Voice) => void;
   readonly setCursor: (quarter: number | null) => void;
   readonly onTap: (handler: (quarter: number) => void) => void;
+  // The cursor's x in the SVG's own units, which are the same as CSS pixels (the svg's width attribute always
+  // matches its viewBox) – what src/ui/app.ts needs to keep the score container scrolled to the cursor.
+  readonly xForQuarter: (quarter: number) => number;
 }
 
 export const createScoreView = (): ScoreView => {
@@ -162,6 +165,8 @@ export const createScoreView = (): ScoreView => {
     svg.append(cursor);
   };
 
+  const xForQuarter = (quarter: number): number => LEFT_MARGIN + xForTime(quarter, PX_PER_QUARTER);
+
   const setCursor = (quarter: number | null): void => {
     if (cursor === null) return;
     if (quarter === null) {
@@ -169,7 +174,7 @@ export const createScoreView = (): ScoreView => {
       return;
     }
     cursor.setAttribute('visibility', 'visible');
-    const x = String(LEFT_MARGIN + xForTime(quarter, PX_PER_QUARTER));
+    const x = String(xForQuarter(quarter));
     cursor.setAttribute('x1', x);
     cursor.setAttribute('x2', x);
   };
@@ -189,5 +194,5 @@ export const createScoreView = (): ScoreView => {
     tapHandler(nearestOnset(noteOnsets(currentScore), quarter));
   });
 
-  return { svg, render, setCursor, onTap };
+  return { svg, render, setCursor, onTap, xForQuarter };
 };
