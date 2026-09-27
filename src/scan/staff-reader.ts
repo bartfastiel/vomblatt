@@ -144,7 +144,7 @@ const stemlessChords = (heads: readonly Head[], spacing: number): Group[] => {
   return groups;
 };
 
-// A stem carries its heads at one end; a "head" at the other end is the thick part of a flag – the thinner one goes
+// A stem carries its heads at one end; a "head" at the other end is the thick end of a beam or flag
 const oneEnd = (group: Group, spacing: number): Group[] => {
   const { stem } = group;
   if (stem === null || group.heads.length < 2) return [group];
@@ -152,8 +152,12 @@ const oneEnd = (group: Group, spacing: number): Group[] => {
   const top = group.heads.filter((h) => h.y < middle - spacing);
   const bottom = group.heads.filter((h) => h.y > middle + spacing);
   if (top.length === 0 || bottom.length === 0) return [group];
+  // The end of a beam runs on along the beam: the narrower end is the head; equally wide, the thicker one
+  const narrowest = (heads: readonly Head[]): number => Math.min(...heads.map((h) => h.width));
   const thickest = (heads: readonly Head[]): number => Math.max(...heads.map((h) => h.thickness));
-  const keep = thickest(top) > thickest(bottom) ? top : bottom;
+  const widthDiff = narrowest(top) - narrowest(bottom);
+  let keep = thickest(top) > thickest(bottom) ? top : bottom;
+  if (Math.abs(widthDiff) > 0.3 * spacing) keep = widthDiff < 0 ? top : bottom;
   const inner = group.heads.filter((h) => !top.includes(h) && !bottom.includes(h));
   return [{ heads: [...keep, ...inner], stem: { ...stem, up: keep === bottom } }];
 };
@@ -231,10 +235,20 @@ const dropStemTips = (groups: readonly Group[], spacing: number): Group[] => {
   return groups.filter((g) => g.stem !== null || !g.heads.every((head) => head.filled && atTip(head)));
 };
 
+// A stem runs along a head's side, never through its middle: a "head" on a stem is the thick end of a beam
+const onStem = (head: Head, verticals: readonly Vertical[], spacing: number): boolean =>
+  verticals.some(
+    (v) =>
+      v.y1 - v.y0 >= 1.5 * spacing &&
+      Math.abs(v.x - head.x) < 0.3 * spacing &&
+      head.y >= v.y0 - 0.3 * spacing &&
+      head.y <= v.y1 + 0.3 * spacing,
+  );
+
 export const readStaff = (staff: Staff, header: Header, heads: readonly Head[], page: Page): StaffReading => {
   const { spacing } = staff;
   const { labeled, clean, verticals } = page;
-  const own = heads.filter((head) => head.x - 0.5 * spacing > header.end);
+  const own = heads.filter((head) => head.x - 0.5 * spacing > header.end && !onStem(head, verticals, spacing));
   const groups = dropStemTips(groupByStem(own, verticals, spacing), spacing);
   const bare: NoteEvent[] = groups.map((g) => noteOf(g, { page, spacing, specks: [], accidentals: [] }));
   const loose = looseComponents(staff, header, labeled, bare);

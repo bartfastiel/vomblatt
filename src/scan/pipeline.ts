@@ -5,12 +5,12 @@ import { connectedComponents, type Labeled } from './components';
 import { findHeads, type Head, type RejectReport } from './heads';
 import { type Header, readHeader } from './header';
 import { distanceToPaper, fillHoles, removeStaffLines } from './morphology';
-import { prepare } from './prepare';
+import { type Prepared, prepare } from './prepare';
 import type { GrayImage } from './raster';
 import { buildScore } from './score-builder';
 import { readStaff, type StaffReading } from './staff-reader';
 import { findStaves, type Staff } from './staves';
-import { groupSystems, voicesOf } from './systems';
+import { groupSystems, splitMelodies, voicesOf } from './systems';
 import { findVerticals, type Vertical } from './verticals';
 
 export class NoStaffError extends Error {
@@ -58,19 +58,48 @@ const solidHeads = (binary: BinaryImage, clean: BinaryImage, staves: readonly St
 };
 
 // `rejected` hears about every head candidate that failed a test – for tuning, not needed to recognise
+interface Found {
+  readonly prepared: Prepared;
+  readonly staves: Staff[];
+}
+
+// How much of the image's width the staves cover, summed over the staves, in line distances
+const coverage = (found: Found | null): number =>
+  found === null ? 0 : found.staves.reduce((sum, staff) => sum + (staff.x1 - staff.x0) / staff.spacing, 0);
+
+const attempt = (input: GrayImage, faint: boolean): Found | null => {
+  const prepared = prepare(input, faint);
+  if (prepared === null) return null;
+  const staves = findStaves(prepared.lines, prepared.spacing.spacing, prepared.spacing.thickness);
+  return staves.length > 0 ? { prepared, staves } : null;
+};
+
+// Staves with the plain threshold; where it finds none or only pieces of lines (the faint lines of a screen photo
+// taken from afar), also with the one for faint lines – the reading that covers more staff wins
+const findPreparedStaves = (input: GrayImage): Found | null => {
+  const plain = attempt(input, false);
+  const longest = plain === null ? 0 : Math.max(...plain.staves.map((staff) => staff.x1 - staff.x0));
+  if (plain !== null && longest >= 0.6 * plain.prepared.binary.width) return plain;
+  const faint = attempt(input, true);
+  return coverage(faint) > 1.2 * coverage(plain) ? faint : plain;
+};
+
 export const recognizeGray = (input: GrayImage, rejected?: RejectReport): Recognition => {
-  const prepared = prepare(input);
-  if (prepared === null) throw new NoStaffError();
+  const found = findPreparedStaves(input);
+  if (found === null) throw new NoStaffError();
+  const { prepared, staves } = found;
   const { binary } = prepared;
-  const staves = findStaves(binary, prepared.spacing.spacing, prepared.spacing.thickness);
-  if (staves.length === 0) throw new NoStaffError();
   const spacing = staves.map((s) => s.spacing).sort((a, b) => a - b)[Math.floor(staves.length / 2)] ?? 1;
   const clean = removeStaffLines(binary, staves);
   const solid = solidHeads(binary, clean, staves, spacing);
-  const heads = findHeads({ original: binary, clean, solid, distance: distanceToPaper(solid) }, staves, rejected);
+  const heads = findHeads(
+    { original: prepared.lines, clean, solid, distance: distanceToPaper(solid) },
+    staves,
+    rejected,
+  );
   const verticals = findVerticals(clean, Math.max(3, Math.round(0.42 * spacing)), Math.round(spacing));
   const labeled = connectedComponents(clean);
-  const headers = staves.map((staff) => readHeader({ clean, labeled, verticals }, staff));
+  const headers = staves.map((staff) => readHeader({ clean, labeled, verticals, heads }, staff));
   const all = staves.map((staff, i) =>
     readStaff(
       staff,
@@ -79,17 +108,21 @@ export const recognizeGray = (input: GrayImage, rejected?: RejectReport): Recogn
       { clean, labeled, verticals },
     ),
   );
-  // Five lines with nothing on them (a rule and a text block that line up by chance) are no staff
-  const kept = all.flatMap((reading, i) =>
-    reading.events.length > 0 || reading.barlines.length > 0 ? [{ reading, header: headers[i] }] : [],
-  );
+  // Five lines without a clef and without a single note on a stem (text, moiré stripes that line up by chance) are
+  // no staff
+  const real = (reading: StaffReading): boolean =>
+    reading.header.clef !== null || reading.events.some((event) => event.kind === 'note' && event.stem !== null);
+  const kept = all.flatMap((reading, i) => (real(reading) ? [{ reading, header: headers[i] }] : []));
   const readings = kept.map((k) => k.reading);
   const keptHeaders = kept.flatMap((k) => (k.header === undefined ? [] : [k.header]));
-  const systems = groupSystems(
-    binary,
-    readings.map((reading) => reading.staff),
-    keptHeaders,
-    readings.map((reading) => reading.barlines),
+  const systems = splitMelodies(
+    groupSystems(
+      binary,
+      readings.map((reading) => reading.staff),
+      keptHeaders,
+      readings.map((reading) => reading.barlines),
+    ),
+    readings,
   );
   const score = buildScore(readings, systems, voicesOf(systems), { keyFifths: commonKey(headers) });
   return {

@@ -24,7 +24,7 @@ export const componentsNearStart = (labeled: Labeled, staff: Staff, reach: numbe
       const x = (c.x0 + c.x1) / 2;
       const y = (c.y0 + c.y1) / 2;
       return (
-        c.x0 >= staff.x0 - spacing &&
+        c.x1 >= staff.x0 - spacing && // the lines may be found only from the clef's right edge on
         c.x0 <= staff.x0 + reach * spacing &&
         y >= lineY(staff, 0, x) - 3 * spacing &&
         y <= lineY(staff, 4, x) + 3 * spacing
@@ -53,6 +53,15 @@ const hasEightBelow = (others: readonly Component[], clef: Component, spacing: n
 // The 8 drawn onto the clef's foot: the clef reaches much further below the staff than a plain treble clef does
 const eightAttached = (clef: Component, staff: Staff): boolean =>
   clef.y1 > lineY(staff, 4, (clef.x0 + clef.x1) / 2) + 2.2 * staff.spacing;
+
+// The bass clef's dots: specks just right of it, around the F line (steps 4.5 to 7.5)
+const hasDots = (components: readonly Component[], clef: Component, staff: Staff): boolean =>
+  components.some((c) => {
+    if (!isSpeck(c, staff.spacing) || c.x0 < clef.x1 - 0.8 * staff.spacing || c.x0 > clef.x1 + staff.spacing)
+      return false;
+    const step = stepAt(staff, (c.x0 + c.x1) / 2, (c.y0 + c.y1) / 2);
+    return step >= 4.5 && step <= 7.5;
+  });
 
 interface Cursor {
   end: number;
@@ -89,7 +98,12 @@ const unionOf = (parts: readonly Component[]): Component => {
   );
 };
 
-const readClef = (components: readonly Component[], staff: Staff, cursor: Cursor): Clef | null => {
+const readClef = (
+  components: readonly Component[],
+  staff: Staff,
+  cursor: Cursor,
+  heads: readonly { readonly x: number; readonly y: number }[],
+): Clef | null => {
   // The first tall piece: a bar number above the staff may start further left, a brace is taller than any clef
   const first = components.find((c) => boxOf(c, staff.spacing).h >= 2 && boxOf(c, staff.spacing).h <= 9);
   if (first === undefined || first.x0 > staff.x0 + 3 * staff.spacing) return null;
@@ -107,10 +121,16 @@ const readClef = (components: readonly Component[], staff: Staff, cursor: Cursor
       (c === first || !isSpeck(c, staff.spacing)),
   );
   const whole = unionOf(parts);
-  const clef = CLEFS[clefKind(whole, staff, staff.spacing)];
+  const kind = CLEFS[clefKind(whole, staff, staff.spacing)];
+  // A bass clef has its two dots; without them it is something else (a note, the remains of another clef)
+  const clef = kind === 'bass' && !hasDots(components, whole, staff) ? undefined : kind;
+  // A clef, or something tall without a head (a clef the photo has damaged): the header goes on after it
+  const headless = !heads.some((h) => h.x >= whole.x0 && h.x <= whole.x1 && h.y >= whole.y0 && h.y <= whole.y1);
+  if (clef !== undefined || (boxOf(whole, staff.spacing).h >= 3.5 && headless)) {
+    cursor.index = Math.max(...parts.map((c) => components.indexOf(c))) + 1;
+    cursor.end = whole.x1;
+  }
   if (clef === undefined) return null;
-  cursor.index = Math.max(...parts.map((c) => components.indexOf(c))) + 1;
-  cursor.end = whole.x1;
   const others = components.filter((c) => !parts.includes(c));
   if (clef === 'treble' && (hasEightBelow(others, whole, staff.spacing) || eightAttached(whole, staff)))
     return 'treble8';
@@ -198,7 +218,7 @@ const halvesInk = (image: BinaryImage, staff: Staff, x: number): [number, number
 };
 
 // A time signature cut into pieces by the removal of the lines (or blurred into the lines): the next cluster of
-// columns after the key is 0.8 to 2.4 line distances wide, has ink in both halves of the staff and carries no stem
+// columns after the key is 0.8 to 2.4 line distances wide, has ink in both halves of the staff and holds no note
 const readMeterColumns = (page: HeaderPage, staff: Staff, cursor: Cursor): boolean => {
   const { spacing } = staff;
   const { clean } = page;
@@ -220,8 +240,21 @@ const readMeterColumns = (page: HeaderPage, staff: Staff, cursor: Cursor): boole
   const end = x - gap;
   const w = (end - start) / spacing;
   const area = (end - start) * 2 * spacing;
-  const stem = page.verticals.some((v) => v.x >= start && v.x <= end && v.y1 - v.y0 >= 2.5 * spacing);
-  if (w < 0.8 || w > 2.4 || stem || upper < 0.15 * area || lower < 0.15 * area) return false;
+  // A note there instead: a long stroke like a stem – beside a head where the heads are known (a digit's stroke
+  // stands in its middle)
+  const stems = page.verticals.filter((v) => v.x >= start && v.x <= end && v.y1 - v.y0 >= 2.5 * spacing);
+  const note =
+    page.heads === undefined
+      ? stems.length > 0
+      : stems.some((v) =>
+          (page.heads ?? []).some(
+            (h) =>
+              Math.abs(Math.abs(v.x - h.x) - 0.6 * spacing) <= 0.3 * spacing &&
+              h.y >= v.y0 - spacing &&
+              h.y <= v.y1 + spacing,
+          ),
+        );
+  if (w < 0.8 || w > 2.4 || note || upper < 0.15 * area || lower < 0.15 * area) return false;
   cursor.end = end;
   return true;
 };
@@ -230,15 +263,19 @@ export interface HeaderPage {
   readonly clean: BinaryImage;
   readonly labeled: Labeled;
   readonly verticals: readonly Vertical[];
+  readonly heads?: readonly { readonly x: number; readonly y: number }[];
 }
 
 export const readHeader = (page: HeaderPage, staff: Staff): Header => {
   const { labeled, clean } = page;
   const components = componentsNearStart(labeled, staff, 24);
   const cursor: Cursor = { end: staff.x0, index: 0 };
-  const clef = readClef(components, staff, cursor);
+  const clef = readClef(components, staff, cursor, page.heads ?? []);
   const keyFifths = readKey(labeled, clean.width, components, staff, cursor, clef);
+  // A time signature follows a clef; where the photo cut off the clef, a tall first note is no time signature
+  const afterClef = cursor.end > staff.x0;
   const meter =
-    readMeterPieces(labeled, clean.width, components, staff, cursor) || readMeterColumns(page, staff, cursor);
+    afterClef &&
+    (readMeterPieces(labeled, clean.width, components, staff, cursor) || readMeterColumns(page, staff, cursor));
   return { clef, keyFifths, meter, end: cursor.end };
 };

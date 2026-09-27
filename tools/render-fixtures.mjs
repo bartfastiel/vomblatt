@@ -35,7 +35,8 @@ const kernOf = (piece, parsed) => {
   if (piece.meter !== null) header.push(tandem(`*M${String(piece.meter[0])}/${String(piece.meter[1])}`));
   if (layout.split) header.push(layout.clefs.map((clef) => (clef === '*' ? '*' : '*^')).join('\t'));
   const body = kernBody(layout.columns, parsed, piece.lyrics);
-  return [...header, ...body, layout.columns.map(() => '*-').join('\t')].join('\n') + '\n';
+  const title = piece.title === undefined ? [] : [`!!!OTL: ${piece.title}`];
+  return [...title, ...header, ...body, layout.columns.map(() => '*-').join('\t')].join('\n') + '\n';
 };
 
 const expectedScore = (piece, parsed) => {

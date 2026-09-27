@@ -125,7 +125,7 @@ const stripStaves = (thin: Uint8Array, image: BinaryImage, strip: number, stripW
       best = profile;
     }
   }
-  const maxThickness = Math.max(3, Math.round(0.35 * spacing));
+  const maxThickness = Math.max(3, Math.round(0.45 * spacing)); // a blurred photo thickens the lines
   return staffGroups(bandsOf(best, xb - xa, maxThickness), spacing).map((ys): StripStaff => ({
     strip,
     x: (xa + xb) / 2,
@@ -215,12 +215,12 @@ interface Extension {
 
 // Follows the five lines beyond the outermost knot, column by column: where at least three lines show a thin run
 // near their course the staff goes on (the course adapts, so a staff seen in perspective is followed); gaps of up to
-// a line distance and a half (a bar line, a head on a line, moiré dashes) are bridged
+// three line distances (a bar line, a beam across the lines, moiré dashes) are bridged
 const follow = (image: BinaryImage, staff: Staff, from: number, direction: 1 | -1): Extension => {
   const { spacing } = staff;
   const window = Math.max(2, Math.round(0.2 * spacing));
-  const maxRun = Math.max(2, Math.round(0.3 * spacing));
-  const maxGap = Math.round(1.5 * spacing);
+  const maxRun = Math.max(2, Math.round(0.4 * spacing));
+  const maxGap = Math.round(3 * spacing);
   const offsets = [0, 0, 0, 0, 0];
   const knots: { x: number; ys: number[] }[] = [];
   let x = Math.round(from);
@@ -268,7 +268,7 @@ const staffOf = (chain: readonly StripStaff[], image: BinaryImage, thickness: nu
 };
 
 export const findStaves = (image: BinaryImage, spacing: number, thickness: number): Staff[] => {
-  const maxRun = Math.max(2, Math.round(2 * thickness + 1), Math.round(0.3 * spacing));
+  const maxRun = Math.max(2, Math.round(2 * thickness + 1), Math.round(0.4 * spacing));
   const thin = thinMask(image, maxRun);
   const stripWidth = Math.max(24, Math.round(6 * spacing));
   const strips = Math.ceil(image.width / stripWidth);

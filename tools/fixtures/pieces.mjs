@@ -126,4 +126,22 @@ export const PIECES = [
     lyrics: HYMN_LYRICS,
     voices: CHORALE,
   },
+  {
+    // "Alle meine Entchen" as the popular song sheets print it: a title, eighths beamed in fours, two systems, small
+    // on the page – what people show on a phone to be photographed
+    id: 'entchen-sheet',
+    title: 'Alle meine Entchen',
+    layout: 'melody',
+    key: '',
+    keyFifths: 0,
+    meter: [4, 4],
+    font: 'Leipzig',
+    pageWidth: 1400,
+    scale: 58,
+    lyrics: ENTCHEN_LYRICS,
+    options: { header: 'auto' },
+    voices: {
+      S: '8cL 8d 8e 8fJ 4g 4g | 8aL 8a 8a 8aJ 2g | 8aL 8a 8a 8aJ 2g | 8fL 8f 8f 8fJ 4e 4e | 8dL 8d 8d 8dJ 2c',
+    },
+  },
 ];

@@ -4,7 +4,9 @@ import type { Score } from '../score/score';
 import { NoStaffError, recognizeGray } from './pipeline';
 import { grayscale, type RgbaImage } from './raster';
 
-export const MAX_SIDE = 2400; // the photo is scaled down to this before recognition – plenty for a few systems
+// The photo is scaled down to this before recognition: a phone camera's full size, so that a staff that is small in
+// the photo (a second phone's screen on a desk) keeps its thin lines; recognition crops to the staves first
+export const MAX_SIDE = 4200;
 
 export const MESSAGES = {
   noStaff: 'Keine Notenlinien gefunden – bitte näher ran und gerade halten.',

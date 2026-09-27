@@ -13,6 +13,7 @@ export interface Head {
   readonly filled: boolean;
   readonly uncertain: boolean; // pitch between two steps, or neither clearly filled nor clearly hollow
   readonly thickness: number; // distance of the centre to the paper, pixels: heads are thicker than flags
+  readonly width: number; // of the solid ink through the centre row, pixels: a beam's end runs on along the beam
 }
 
 export interface HeadImages {
@@ -125,27 +126,45 @@ const hasLedger = (image: BinaryImage, x: number, y: number, spacing: number): b
     for (let dy = -reach; dy <= reach && !onRow; dy++) onRow = inkAt(xx, row + dy);
     return onRow && !inkAt(xx, row - clear) && !inkAt(xx, row + clear);
   };
-  const side = (from: number, to: number): boolean => {
+  const side = (from: number, to: number): number => {
     let hits = 0;
     let total = 0;
     for (let xx = Math.round(from); xx <= Math.round(to); xx++) {
       total++;
       if (lineAt(xx)) hits++;
     }
-    return hits >= 0.5 * total;
+    return hits / total;
   };
-  return side(x - 0.88 * spacing, x - 0.7 * spacing) && side(x + 0.7 * spacing, x + 0.88 * spacing);
+  // Both sides, or clearly one side (in a blurred photo the short ledger line fades on the other)
+  const left = side(x - 0.9 * spacing, x - 0.68 * spacing);
+  const right = side(x + 0.68 * spacing, x + 0.9 * spacing);
+  return (left >= 0.4 && right >= 0.4) || Math.max(left, right) >= 0.7;
 };
 
 // Heads below the staff from C4 (treble) on need their ledger lines, likewise above – lyrics have none
 export const ledgersPresent = (image: BinaryImage, staff: Staff, x: number, step: number): boolean => {
-  for (let ledger = -2; ledger >= step; ledger -= 2) {
-    if (!hasLedger(image, x, stepY(staff, x, ledger), staff.spacing)) return false;
-  }
-  for (let ledger = 10; ledger <= step; ledger += 2) {
-    if (!hasLedger(image, x, stepY(staff, x, ledger), staff.spacing)) return false;
-  }
+  const present = (ledger: number): boolean => {
+    const y = stepY(staff, x, ledger);
+    // The first ledger line of a head sitting on it: ink just beyond the head on its row is enough (in a blurred
+    // photo the short line merges with the head); lyrics are further away than that
+    const onIt = ledger === step && (ledger === -2 || ledger === 10);
+    return hasLedger(image, x, y, staff.spacing) || (onIt && stubs(image, x, y, staff.spacing));
+  };
+  for (let ledger = -2; ledger >= step; ledger -= 2) if (!present(ledger)) return false;
+  for (let ledger = 10; ledger <= step; ledger += 2) if (!present(ledger)) return false;
   return true;
+};
+
+// Ink on both sides of a head on row y, a little beyond its edge
+const stubs = (image: BinaryImage, x: number, y: number, spacing: number): boolean => {
+  const reach = Math.max(1, Math.round(0.15 * spacing));
+  const inkNear = (xx: number): boolean => {
+    for (let dy = -reach; dy <= reach; dy++) {
+      if (image.data[(Math.round(y) + dy) * image.width + Math.round(xx)] === 1) return true;
+    }
+    return false;
+  };
+  return inkNear(x - 0.72 * spacing) && inkNear(x + 0.72 * spacing);
 };
 
 // Centre of the thick part: mean of the pixels at least 80 % as far from the paper as the maximum
@@ -234,7 +253,14 @@ const CHECKS: readonly (readonly [string, (p: Probe) => boolean])[] = [
       return extent <= 3.2 * p.spacing && extent >= 0.72 * p.spacing;
     },
   ],
-  ['width', (p) => horizontalExtent(p.images.solid, p.x, p.y) >= 1.05 * p.spacing],
+  [
+    'width',
+    (p) => {
+      // Wider than a letter's bowl, narrower than a beam that runs on to the next stem
+      const width = horizontalExtent(p.images.solid, p.x, p.y);
+      return width >= 1.05 * p.spacing && width <= 2.8 * p.spacing;
+    },
+  ],
   ['isolated', (p) => isolated(p.images.solid, p.x, p.y, p.spacing)],
   ['ledgers', (p) => ledgersPresent(p.images.original, p.staff, p.x, Math.round(stepAt(p.staff, p.x, p.y)))],
 ];
@@ -269,6 +295,7 @@ const headOf = (images: HeadImages, staves: readonly Staff[], c: Candidate, repo
     filled: hole < 0.1,
     uncertain: Math.abs(rawStep - step) > 0.35 || (hole > 0.06 && hole < 0.14),
     thickness: c.d,
+    width: horizontalExtent(images.solid, x, y),
   };
 };
 
@@ -292,5 +319,6 @@ export const findHeads = (images: HeadImages, staves: readonly Staff[], report?:
     filled: h.filled,
     uncertain: h.uncertain,
     thickness: h.thickness,
+    width: h.width,
   }));
 };

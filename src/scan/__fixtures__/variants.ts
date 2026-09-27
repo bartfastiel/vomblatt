@@ -1,5 +1,6 @@
 // The distortions every fixture is read under: clean, simulated screen photos (moiré, glare, perspective) and
 // simulated camera photos of paper (rotation, shadow, blur, noise, perspective).
+import { simulateDeskPhoto } from '../desk-photo';
 import { simulatePhoto } from '../photo-simulation';
 import type { GrayImage } from '../raster';
 import { screenQuad, simulateScreenPhoto } from '../screen-photo';
@@ -58,9 +59,18 @@ export const PHONE_SCREEN_VARIANTS: readonly Variant[] = [
 
 export const PAPER_VARIANTS: readonly Variant[] = [paper(1.5, 1), paper(-3, 2), paper(4.5, 3)];
 
+// A phone lying on a desk, photographed by another phone at full camera size (as the acceptance check does it)
+const desk = (tilt: number, zoom: number, seed: number): Variant => ({
+  name: `desk tilt ${String(tilt)}° zoom ${String(zoom)}`,
+  render: (sheet) => simulateDeskPhoto(sheet, { width: 4000, height: 3000, tilt, turn: -5, zoom, seed }),
+});
+
+export const DESK_VARIANTS: readonly Variant[] = [desk(8, 1, 1), desk(18, 1, 2), desk(10, 1.9, 3)];
+
 export const ALL_VARIANTS: readonly Variant[] = [
   CLEAN,
   ...SCREEN_VARIANTS,
   ...PHONE_SCREEN_VARIANTS,
   ...PAPER_VARIANTS,
+  ...DESK_VARIANTS,
 ];
