@@ -89,14 +89,47 @@ export const whitenBorders = (image: GrayImage, paper: number): { image: GrayIma
   return { image: { width, height, data }, crop };
 };
 
-// Ink where the pixel or its 3×3 mean lies below 90 % of the mean in the window ±radius (minus 6 against noise: the 3×3
-// mean closes gaps in washed-out strokes, the pixel itself keeps fine bright lines). Areas that are no paper at all
-// (the table) stay empty.
-export const binarize = (image: GrayImage, paper: number, windowRadius?: number): BinaryImage => {
+// Brightness of the paper around every pixel: the brightest pixel of each block of `block`² pixels, spread
+// bilinearly – dark symbols do not lower it, as they lower a mean
+export const paperLevel = (image: GrayImage, block: number): ((x: number, y: number) => number) => {
+  const { width, height, data } = image;
+  const bw = Math.ceil(width / block);
+  const bh = Math.ceil(height / block);
+  const maxima = new Uint8Array(bw * bh);
+  for (let y = 0; y < height; y++) {
+    const by = Math.floor(y / block);
+    for (let x = 0; x < width; x++) {
+      const b = by * bw + Math.floor(x / block);
+      const v = byteAt(data, y * width + x);
+      if (v > byteAt(maxima, b)) maxima[b] = v;
+    }
+  }
+  const at = (bx: number, by: number): number =>
+    byteAt(maxima, Math.min(bh - 1, Math.max(0, by)) * bw + Math.min(bw - 1, Math.max(0, bx)));
+  return (x, y) => {
+    const fx = x / block - 0.5;
+    const fy = y / block - 0.5;
+    const bx = Math.floor(fx);
+    const by = Math.floor(fy);
+    const tx = fx - bx;
+    const ty = fy - by;
+    const top = at(bx, by) * (1 - tx) + at(bx + 1, by) * tx;
+    const bottom = at(bx, by + 1) * (1 - tx) + at(bx + 1, by + 1) * tx;
+    return top * (1 - ty) + bottom * ty;
+  };
+};
+
+// Ink where the pixel or its 3×3 mean lies below 90 % of the mean in the window ±radius (minus 6 against noise: the
+// 3×3 mean closes gaps in washed-out strokes, the pixel itself keeps fine bright lines). With `faint`, also where it
+// is clearly below the paper around it: faint thin staff lines next to dark symbols (which pull the mean down) are
+// found, at the price of fattening every stroke – for finding staves, not for reading symbols. Areas that are no
+// paper at all (the table, a phone's bezel) stay empty.
+export const binarize = (image: GrayImage, paper: number, windowRadius?: number, faint = false): BinaryImage => {
   const { width, height, data } = image;
   const integral = new IntegralImage(image);
   const out = new Uint8Array(width * height);
   const radius = windowRadius ?? Math.max(12, Math.round(width / 80));
+  const level = faint ? paperLevel(image, radius) : () => 0;
   const isInk = (x: number, y: number): boolean => {
     const mean = integral.mean(
       Math.max(0, x - radius),
@@ -105,7 +138,7 @@ export const binarize = (image: GrayImage, paper: number, windowRadius?: number)
       Math.min(height, y + radius + 1),
     );
     if (mean < 0.3 * paper) return false;
-    const threshold = mean * 0.9 - 6;
+    const threshold = Math.max(mean * 0.9 - 6, level(x, y) * 0.86);
     return byteAt(data, y * width + x) < threshold || integral.mean(x - 1, y - 1, x + 2, y + 2) < threshold;
   };
   for (let y = 1; y < height - 1; y++) {

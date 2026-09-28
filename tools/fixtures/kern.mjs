@@ -63,28 +63,36 @@ export const scoreNotes = (bars) => {
 };
 
 // All voices side by side, one kern record per onset; `columns` lists the voice of each kern column (or 'text')
-export const kernBody = (columns, parsed, lyrics) => {
-  const voices = columns.filter((c) => c !== 'text');
+// `barlines`: kern bar line styles after given bar indexes, e.g. { 1: '!|:', 3: ':|!' } for repeat signs
+// Columns that are no voice but text sung to the melody's notes: lyrics lines and chord names
+const isText = (column) => column.startsWith('text') || column === 'chords';
+
+// `texts`: per text column the tokens, one per sung note of the melody; `barlines`: kern bar line styles after
+// given bar indexes, e.g. { 1: '!|:', 3: ':|!' } for repeat signs
+export const kernBody = (columns, parsed, texts, barlines = {}) => {
+  const voices = columns.filter((c) => !isText(c));
   const barCount = parsed[voices[0]].length;
   const lines = [];
-  let syllable = 0;
+  const next = Object.fromEntries(columns.filter(isText).map((c) => [c, 0]));
   const melody = voices.includes('S') ? 'S' : voices[0];
   for (let b = 0; b < barCount; b++) {
     const onsets = new Set();
     for (const v of voices) for (const e of parsed[v][b].events) onsets.add(round(e.start));
     for (const onset of [...onsets].sort((x, y) => x - y)) {
       const fields = columns.map((c) => {
-        const voice = c === 'text' ? melody : c;
+        const voice = isText(c) ? melody : c;
         const event = parsed[voice][b].events.find((e) => round(e.start) === onset);
-        if (c !== 'text') return event === undefined ? '.' : event.token;
+        if (!isText(c)) return event === undefined ? '.' : event.token;
         const sung = event !== undefined && event.midi !== null && !event.tieEnd && !event.tieMiddle;
-        if (!sung || lyrics === undefined || syllable >= lyrics.length) return '.';
-        return lyrics[syllable++];
+        const tokens = texts[c];
+        if (!sung || tokens === undefined || next[c] >= tokens.length) return '.';
+        return tokens[next[c]++];
       });
       lines.push(fields.join('\t'));
     }
     const isLast = b === barCount - 1;
-    lines.push(columns.map(() => (isLast ? '==' : `=${String(b + 1)}`)).join('\t'));
+    const style = barlines[b] ?? '';
+    lines.push(columns.map(() => (isLast ? `==${style}` : `=${String(b + 1)}${style}`)).join('\t'));
   }
   return lines;
 };

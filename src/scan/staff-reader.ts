@@ -128,7 +128,7 @@ const groupByStem = (heads: readonly Head[], verticals: readonly Vertical[], spa
     }
     pending = rest;
   }
-  const stemmed = [...byStem.values()].flatMap((group) => oneEnd(group, spacing));
+  const stemmed = [...byStem.values()].flatMap((group) => oneEnd(sameKind(group), spacing));
   return [...stemmed, ...stemlessChords(pending, spacing)];
 };
 
@@ -144,7 +144,11 @@ const stemlessChords = (heads: readonly Head[], spacing: number): Group[] => {
   return groups;
 };
 
-// A stem carries its heads at one end; a "head" at the other end is the thick part of a flag – the thinner one goes
+// The heads on one stem are all filled or all hollow: a hollow "head" among filled ones is the loop of a flag
+const sameKind = (group: Group): Group =>
+  group.heads.some((h) => h.filled) ? { ...group, heads: group.heads.filter((h) => h.filled) } : group;
+
+// A stem carries its heads at one end; a "head" at the other end is the thick end of a beam or flag
 const oneEnd = (group: Group, spacing: number): Group[] => {
   const { stem } = group;
   if (stem === null || group.heads.length < 2) return [group];
@@ -152,8 +156,12 @@ const oneEnd = (group: Group, spacing: number): Group[] => {
   const top = group.heads.filter((h) => h.y < middle - spacing);
   const bottom = group.heads.filter((h) => h.y > middle + spacing);
   if (top.length === 0 || bottom.length === 0) return [group];
+  // The end of a beam runs on along the beam: the narrower end is the head; equally wide, the thicker one
+  const narrowest = (heads: readonly Head[]): number => Math.min(...heads.map((h) => h.width));
   const thickest = (heads: readonly Head[]): number => Math.max(...heads.map((h) => h.thickness));
-  const keep = thickest(top) > thickest(bottom) ? top : bottom;
+  const widthDiff = narrowest(top) - narrowest(bottom);
+  let keep = thickest(top) > thickest(bottom) ? top : bottom;
+  if (Math.abs(widthDiff) > 0.3 * spacing) keep = widthDiff < 0 ? top : bottom;
   const inner = group.heads.filter((h) => !top.includes(h) && !bottom.includes(h));
   return [{ heads: [...keep, ...inner], stem: { ...stem, up: keep === bottom } }];
 };
@@ -231,10 +239,20 @@ const dropStemTips = (groups: readonly Group[], spacing: number): Group[] => {
   return groups.filter((g) => g.stem !== null || !g.heads.every((head) => head.filled && atTip(head)));
 };
 
+// A stem runs along a head's side, never through its middle: a "head" on a stem is the thick end of a beam
+const onStem = (head: Head, verticals: readonly Vertical[], spacing: number): boolean =>
+  verticals.some(
+    (v) =>
+      v.y1 - v.y0 >= 1.5 * spacing &&
+      Math.abs(v.x - head.x) < 0.3 * spacing &&
+      head.y >= v.y0 - 0.3 * spacing &&
+      head.y <= v.y1 + 0.3 * spacing,
+  );
+
 export const readStaff = (staff: Staff, header: Header, heads: readonly Head[], page: Page): StaffReading => {
   const { spacing } = staff;
   const { labeled, clean, verticals } = page;
-  const own = heads.filter((head) => head.x - 0.5 * spacing > header.end);
+  const own = heads.filter((head) => head.x - 0.5 * spacing > header.end && !onStem(head, verticals, spacing));
   const groups = dropStemTips(groupByStem(own, verticals, spacing), spacing);
   const bare: NoteEvent[] = groups.map((g) => noteOf(g, { page, spacing, specks: [], accidentals: [] }));
   const loose = looseComponents(staff, header, labeled, bare);
@@ -253,8 +271,15 @@ export const readStaff = (staff: Staff, header: Header, heads: readonly Head[], 
     .filter((v) => !stems.has(v) && v.x > header.end && v.x >= staff.x0 - spacing && v.x <= staff.x1 + spacing)
     .filter((v) => isBarline(v, staff))
     .map((v) => v.x);
-  const events: StaffEvent[] = [...notes, ...rests].sort((a, b) => a.x - b.x);
-  return { staff, header, events, barlines: mergeClose(barlines, spacing) };
+  const merged = mergeClose(barlines, spacing);
+  // Right beside a bar line a stemless hollow "head" is a repeat sign's dots against the thick line
+  const beside = (event: StaffEvent): boolean =>
+    event.kind === 'note' &&
+    event.stem === null &&
+    !event.heads.some((h) => h.filled) &&
+    merged.some((x) => Math.abs(x - event.x) < 0.8 * spacing);
+  const events: StaffEvent[] = [...notes, ...rests].filter((e) => !beside(e)).sort((a, b) => a.x - b.x);
+  return { staff, header, events, barlines: merged };
 };
 
 // A double bar line is one bar line

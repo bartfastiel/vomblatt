@@ -20,6 +20,13 @@ const OUT = 'src/scan/__fixtures__';
 const LAYOUTS = {
   melody: { columns: ['S', 'text'], clefs: ['*clefG2', '*'], split: false },
   satb2: { columns: ['T', 'B', 'S', 'A', 'text'], clefs: ['*clefF4', '*clefG2', '*'], split: true },
+  // A hymnal page: the melody, three lines of lyrics under it, chord names above
+  hymnal: {
+    columns: ['S', 'text', 'text2', 'text3', 'chords'],
+    clefs: ['*clefG2', '*', '*', '*', '*'],
+    spines: ['**kern', '**text', '**text', '**text', '**mxhm'],
+    split: false,
+  },
   satb4: {
     columns: ['B', 'T', 'A', 'S', 'text'],
     clefs: ['*clefF4', '*clefGv2', '*clefG2', '*clefG2', '*'],
@@ -29,13 +36,18 @@ const LAYOUTS = {
 
 const kernOf = (piece, parsed) => {
   const layout = LAYOUTS[piece.layout];
-  const spines = layout.clefs.map((clef) => (clef === '*' ? '**text' : '**kern'));
+  const spines = layout.spines ?? layout.clefs.map((clef) => (clef === '*' ? '**text' : '**kern'));
   const tandem = (value) => layout.clefs.map((clef) => (clef === '*' ? '*' : value)).join('\t');
   const header = [spines.join('\t'), layout.clefs.join('\t'), tandem(`*k[${piece.key}]`)];
   if (piece.meter !== null) header.push(tandem(`*M${String(piece.meter[0])}/${String(piece.meter[1])}`));
   if (layout.split) header.push(layout.clefs.map((clef) => (clef === '*' ? '*' : '*^')).join('\t'));
-  const body = kernBody(layout.columns, parsed, piece.lyrics);
-  return [...header, ...body, layout.columns.map(() => '*-').join('\t')].join('\n') + '\n';
+  if (piece.tempo !== undefined) header.push(tandem(`*MM${String(piece.tempo)}`));
+  const [text, text2, text3] = piece.verses ?? [piece.lyrics];
+  const texts = { text, text2, text3, chords: piece.chords };
+  const body = kernBody(layout.columns, parsed, texts, piece.barlines ?? {});
+  const title = piece.title === undefined ? [] : [`!!!OTL: ${piece.title}`];
+  if (piece.tempo !== undefined) title.push(`!!!OMD: [quarter] = ${String(piece.tempo)}`);
+  return [...title, ...header, ...body, layout.columns.map(() => '*-').join('\t')].join('\n') + '\n';
 };
 
 const expectedScore = (piece, parsed) => {

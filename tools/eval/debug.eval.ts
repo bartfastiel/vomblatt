@@ -77,7 +77,18 @@ const logHeader = (result: Recognition, index: number): void => {
 
 const logEvents = (result: Recognition, index: number): void => {
   for (const head of result.heads.filter((h) => h.staff === index)) {
-    log('  head', Math.round(head.x), Math.round(head.y), 'step', head.step, head.filled ? 'filled' : 'hollow');
+    log(
+      '  head',
+      Math.round(head.x),
+      Math.round(head.y),
+      'step',
+      head.step,
+      head.filled ? 'filled' : 'hollow',
+      'd',
+      head.thickness.toFixed(1),
+      'w',
+      head.width,
+    );
   }
   for (const event of result.readings[index]?.events ?? []) {
     if (event.kind === 'rest') {
