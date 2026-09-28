@@ -108,7 +108,9 @@ export const findRings = (
       // Not a found head again, and not squeezed between found ones (a flag and a stem enclose paper like a ring)
       .filter(
         (h) =>
-          !known.some((k) => Math.abs(k.x - h.x) < 1.6 * spacing) && !byBarline(h) && !nearFullColumn(image, staff, h.x),
+          !known.some((k) => Math.abs(k.x - h.x) < 1.6 * spacing) &&
+          !byBarline(h) &&
+          !nearFullColumn(image, staff, h.x),
       )
       .filter(
         (h) => !found.some((o) => o !== h && o.score > h.score && Math.hypot(o.x - h.x, o.y - h.y) < 0.8 * spacing),
