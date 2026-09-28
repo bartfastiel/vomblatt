@@ -7,6 +7,7 @@ import type { BinaryImage } from './binarize';
 import type { Header } from './header';
 import type { Clef } from './pitch-from-staff';
 import type { System, VoicePart } from './score-builder';
+import type { StaffReading } from './staff-reader';
 import { lineY, type Staff } from './staves';
 
 // Whether the rows between two staves are ink in column x (a few rows of blur or moiré may be missing)
@@ -91,6 +92,29 @@ export const groupSystems = (
   });
   return systems.map((members) => ({ staves: members, parts: partsOf(members) }));
 };
+
+// Two voices on a staff: notes with stems up and down at the same place, again and again
+export const twoVoiced = (reading: StaffReading): boolean => {
+  const notes = reading.events.flatMap((e) =>
+    e.kind === 'note' && e.stem !== null ? [{ x: e.x, up: e.stem.up }] : [],
+  );
+  const pairs = notes.filter(
+    (a) => a.up && notes.some((b) => !b.up && Math.abs(a.x - b.x) < 0.8 * reading.staff.spacing),
+  ).length;
+  return pairs >= 2 && pairs >= 0.2 * notes.length;
+};
+
+// Two staves joined into a system that carry one voice each and no bass clef are two lines of a melody (a photo's
+// frame or a phone's bezel can look like a system line)
+export const splitMelodies = (systems: readonly System[], readings: readonly StaffReading[]): System[] =>
+  systems.flatMap((system) => {
+    const [upper, lower] = system.staves;
+    if (system.staves.length !== 2 || upper === undefined || lower === undefined) return [system];
+    const pair = [readings[upper], readings[lower]];
+    const bass = pair.some((r) => r?.header.clef === 'bass');
+    if (bass || pair.some((r) => r !== undefined && twoVoiced(r))) return [system];
+    return [upper, lower].map((staff) => ({ staves: [staff], parts: partsOf([staff]) }));
+  });
 
 // The voices the systems give, in the order S, A, T, B
 export const voicesOf = (systems: readonly System[]): Voice[] => {

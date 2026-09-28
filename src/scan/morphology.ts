@@ -104,9 +104,40 @@ export const fillHoles = (source: BinaryImage, maxWidth: number, maxHeight: numb
     if (data[start] === 1 || seen[start] === 1) continue;
     const region = paperRegion(source, seen, start, stack);
     const small = region.x1 - region.x0 + 1 <= maxWidth && region.y1 - region.y0 + 1 <= maxHeight;
-    if (!region.open && small) for (const index of region.pixels) data[index] = 1;
+    if (!region.open && small && !boxLike(region, source.width)) for (const index of region.pixels) data[index] = 1;
   }
   return image;
+};
+
+// A box: its top and bottom rows are nearly as wide as its widest row – paper between two staff lines, closed off by
+// a bar line and a head, not the rounded inside of a head
+const boxLike = (region: Region, width: number): boolean => {
+  const rows = new Map<number, number>();
+  for (const index of region.pixels) {
+    const y = Math.floor(index / width);
+    rows.set(y, (rows.get(y) ?? 0) + 1);
+  }
+  const widest = Math.max(...rows.values());
+  const top = rows.get(region.y0) ?? 0;
+  const bottom = rows.get(region.y1) ?? 0;
+  return widest >= 4 && top >= 0.8 * widest && bottom >= 0.8 * widest;
+};
+
+// Ink grown by one pixel in every direction (3×3): closes the one-pixel gaps of a faint printed ring
+export const dilate = (image: BinaryImage): BinaryImage => {
+  const { width, height, data } = image;
+  const wide = new Uint8Array(width * height);
+  for (let i = 0; i < data.length; i++) {
+    const x = i % width;
+    const left = x > 0 && data[i - 1] === 1;
+    const right = x < width - 1 && data[i + 1] === 1;
+    if (data[i] === 1 || left || right) wide[i] = 1;
+  }
+  const out = new Uint8Array(width * height);
+  for (let i = 0; i < wide.length; i++) {
+    if (wide[i] === 1 || wide[i - width] === 1 || wide[i + width] === 1) out[i] = 1;
+  }
+  return { width, height, data: out };
 };
 
 // Chamfer distance (3-4) of every ink pixel to the nearest paper pixel, in thirds of a pixel

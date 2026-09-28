@@ -65,7 +65,10 @@ const placeEvents = (readings: readonly StaffReading[], systems: readonly System
     const reading = part === undefined ? undefined : readings[part.staff];
     const barlines = systemBarlines(readings, system);
     if (part !== undefined && reading !== undefined) {
-      const clef = reading.header.clef ?? part.clef;
+      // An octave-treble clef is believed only where a tenor is expected: elsewhere lyrics under a treble clef can
+      // look like its 8
+      const read = reading.header.clef === 'treble8' && part.clef !== 'treble8' ? 'treble' : reading.header.clef;
+      const clef = read ?? part.clef;
       for (const event of partEvents(reading, part)) {
         const crossed = barlines.filter((x) => x < event.x).length;
         placed.push({ event, bar: bar + crossed, staff: part.staff, clef });
@@ -76,8 +79,20 @@ const placeEvents = (readings: readonly StaffReading[], systems: readonly System
   return placed;
 };
 
+// Bar lines of a system that close a bar: a bar line before the system's first note (a repeat sign at its start)
+// closes nothing – the next system goes on right after the previous one
+const closing = (readings: readonly StaffReading[], system: System, barlines: readonly number[]): number[] => {
+  const xs = system.staves.flatMap((i) => (readings[i]?.events ?? []).map((event) => event.x));
+  if (xs.length === 0) return [...barlines];
+  const first = Math.min(...xs);
+  return barlines.filter((x) => x > first);
+};
+
 // Bar lines of a system: those of its staves, merged – a bar line through two staves counts once
-export const systemBarlines = (readings: readonly StaffReading[], system: System): number[] => {
+export const systemBarlines = (readings: readonly StaffReading[], system: System): number[] =>
+  closing(readings, system, allBarlines(readings, system));
+
+const allBarlines = (readings: readonly StaffReading[], system: System): number[] => {
   const all = system.staves.flatMap((i) => readings[i]?.barlines ?? []).sort((a, b) => a - b);
   const spacing = readings[system.staves[0] ?? 0]?.staff.spacing ?? 1;
   const merged: number[] = [];

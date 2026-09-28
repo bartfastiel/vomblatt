@@ -26,6 +26,7 @@ export const head = (x: number, step: number, staffTop = 100, extra: Partial<Not
   filled: true,
   uncertain: false,
   thickness: 5,
+  width: 13,
   ...extra,
 });
 

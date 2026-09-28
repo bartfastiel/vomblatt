@@ -9,8 +9,8 @@ const blank = toRgba({ width: 40, height: 30, data: new Uint8Array(1200).fill(25
 
 describe('workingSize', () => {
   it('shrinks the long side to MAX_SIDE and keeps the aspect ratio', () => {
-    expect(workingSize(4000, 3000)).toEqual({ width: MAX_SIDE, height: 1800 });
-    expect(workingSize(3000, 4000)).toEqual({ width: 1800, height: MAX_SIDE });
+    expect(workingSize(2 * MAX_SIDE, 1.5 * MAX_SIDE)).toEqual({ width: MAX_SIDE, height: 0.75 * MAX_SIDE });
+    expect(workingSize(1.5 * MAX_SIDE, 2 * MAX_SIDE)).toEqual({ width: 0.75 * MAX_SIDE, height: MAX_SIDE });
   });
 
   it('never enlarges and never reaches zero', () => {
